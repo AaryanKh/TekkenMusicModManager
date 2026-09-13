@@ -9,10 +9,72 @@ TekkenMusicModManager.sln
 ├── src/Tmm.App         WPF GUI (net8.0-windows): Create wizard, Dashboard, Settings
 ├── src/Tmm.Cli         `tmm` command line — the full pipeline without the GUI
 ├── tests/Tmm.Core.Tests  xunit: WEM round-trip, scoring, registry state, analyzer on synthetic audio
-└── data/jukebox_slots.csv  the community sheet, normalized (IDs + titles + whole-second lengths)
+├── data/jukebox_slots.csv  the community sheet, normalized (IDs + titles + whole-second lengths)
+└── data/stock_catalog.json the measured slot catalog that ships with the app (432 slots)
 ```
 
-## Build
+## Install
+
+Grab the portable zip from [Releases](https://github.com/AaryanKh/TekkenMusicModManager/releases) and
+unzip it somewhere you can write to — your Desktop or Documents, **not** inside `Program Files`. Run
+`TekkenMusicModManager.exe`. There is no installer to run and no .NET to install; the runtime is inside
+the exe, which is why the first launch takes a second or two longer than later ones.
+
+Windows SmartScreen will say "Windows protected your PC" because the exe is not code-signed. Click
+**More info → Run anyway**.
+
+Everything the app saves stays in `UserData\` next to the exe, so moving or backing up that one folder
+takes your settings and every mod with it.
+
+### Two tools you have to supply
+
+Neither is bundled, for licensing reasons. The zip ships empty `tools\ffmpeg\` and `tools\UnrealPak\`
+folders to drop them into, and pointing Settings at them is a one-time step.
+
+**ffmpeg** — decodes whatever you feed the app (MP3, FLAC, WAV, M4A, OGG). Easiest route is
+**Settings → External tools → Install with winget**, which does it for you. Otherwise run
+`winget install Gyan.FFmpeg` yourself, or download a build from
+[gyan.dev](https://www.gyan.dev/ffmpeg/builds/), put `ffmpeg.exe` in `tools\ffmpeg\`, and Browse to it
+in Settings.
+
+**UnrealPak.exe** — packs the finished mod into the `<name>_P.pak` the game loads. This is the community
+build that comes with the usual Tekken 8 modding tutorials, normally a small bundle of `UnrealPak.exe`
+plus its DLLs and a few `.bat` files. It is not on winget and there is no official download, so use the
+one from whichever tutorial you followed. Put the whole bundle in `tools\UnrealPak\` and Browse to
+`UnrealPak.exe` in Settings. Keep the DLLs next to it; it will not run without them.
+
+### Everything else is automatic
+
+| | |
+|---|---|
+| **Tekken 8 folder** | Auto-detected through Steam's `libraryfolders.vdf`. Settings → **Auto-detect (Steam)** if it guessed wrong. |
+| **Slot catalog** | Ships with the app — 432 measured slots. Nothing to extract, **no FModel**. See [The shipped catalog](#the-shipped-catalog). |
+| **.NET** | Built into the exe. |
+| **Wwise** | Not used at all (Spike B). |
+
+Optional: set a `rubberband.exe` path in Settings for pitch-preserving time-stretch. Without it the
+built-in resampler stretches and shifts pitch by the same ratio, up to about a semitone at the 6 % cap.
+
+### Check it took
+
+The Dashboard shows one status line. When it reads **Ready.** you can build a mod. Until then it names
+what is still missing:
+
+```
+Not set up yet: ffmpeg, UnrealPak.exe — see Settings.
+```
+
+From a terminal, `tmm.exe find-game` and `tmm.exe catalog status` answer the same questions.
+
+### Installer instead of the zip
+
+`installer\build-wix.ps1` and `installer\build-installer.ps1` produce a setup exe if you would rather
+install than unzip. The Inno wizard adds pages the zip has no equivalent for: detected ffmpeg and
+UnrealPak paths with Browse, an offer to install ffmpeg with winget, and the Tekken 8 folder. It writes
+`install-hints.json`, which the app folds into its settings on first start. See
+[Distribution builds](#distribution-builds).
+
+## Build from source
 
 Requires the .NET 8 SDK (`winget install Microsoft.DotNet.SDK.8`). Visual Studio 2022 17.8+ or Rider both
 open the solution; from a terminal:
@@ -26,17 +88,7 @@ dotnet run --project src/Tmm.Cli -- --help
 
 `Tmm.Core`, `Tmm.Cli` and the tests are plain `net8.0`. Only `Tmm.App` needs Windows (WPF).
 
-## Runtime requirements
-
-| Tool | Needed for | Notes |
-|---|---|---|
-| **ffmpeg** | decoding your MP3/FLAC/WAV/… | `winget install Gyan.FFmpeg`, or set the path in Settings |
-| **UnrealPak.exe** (community build) | packing `<name>_P.pak` | the one from the usual Tekken modding tutorial; set the path in Settings |
-| **Extracted stock WEMs** | *optional* — only to re-measure the catalog after a game patch | a catalog is shipped with the app, so a normal install needs nothing here. To rebuild: export `Polaris/Content/WwiseAudio/Media` from `pakchunk0-Windows.pak` with FModel and point Settings at the folder. Only the ~859 IDs the sheet names are used |
-| rubberband.exe (optional) | pitch-preserving time-stretch | without it, the built-in resampler stretches (pitch shifts by the same ratio — up to ~1 semitone at the 6 % cap) |
-| A Tekken 8 install | enabling mods | auto-detected through Steam's `libraryfolders.vdf` |
-
-Wwise is **not** required (Spike B). **FModel is not required either** — see [The shipped catalog](#the-shipped-catalog).
+Building from source still needs ffmpeg and UnrealPak at runtime — see [Install](#install).
 
 ## The shipped catalog
 

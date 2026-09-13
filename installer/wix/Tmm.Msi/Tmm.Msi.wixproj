@@ -1,0 +1,38 @@
+<Project Sdk="WixToolset.Sdk/5.0.2">
+
+  <!--
+    MSI for Tekken Music Mod Manager (WiX v5, SDK-style: builds in Visual Studio 2022 with the free
+    HeatWave extension, or with plain `dotnet build`). Installs the framework-dependent publish output;
+    the .NET 8 Desktop Runtime is chained by Tmm.Bundle, which is what end users get.
+
+    Before compiling, the BeforeBuild target below publishes the app and the CLI so that "Build" in
+    Visual Studio produces an up-to-date MSI without extra steps.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Package</OutputType>
+    <InstallerPlatform>x64</InstallerPlatform>
+    <OutputName>TekkenMusicModManager</OutputName>
+    <SuppressSpecificWarnings>1076</SuppressSpecificWarnings>
+    <RepoRoot>$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)..\..\..'))</RepoRoot>
+    <AppPublishDir>$(RepoRoot)src\Tmm.App\bin\publish\fdd-win-x64\</AppPublishDir>
+    <ProductVersion Condition="'$(ProductVersion)' == ''">$(Version)</ProductVersion>
+    <ProductVersion Condition="'$(ProductVersion)' == ''">0.1.0</ProductVersion>
+    <DefineConstants>$(DefineConstants);PublishDir=$(AppPublishDir);ProductVersion=$(ProductVersion)</DefineConstants>
+    <SkipPublish Condition="'$(SkipPublish)' == ''">false</SkipPublish>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WixToolset.UI.wixext" Version="5.0.2" />
+  </ItemGroup>
+
+  <!-- Publish the app + CLI framework-dependent for win-x64 into AppPublishDir. -->
+  <Target Name="PublishApp" BeforeTargets="BeforeBuild" Condition="'$(SkipPublish)' != 'true'">
+    <Message Importance="high" Text="Publishing Tmm.App and Tmm.Cli (framework-dependent, win-x64) to $(AppPublishDir)" />
+    <RemoveDir Directories="$(AppPublishDir)" />
+    <Exec Command="dotnet publish &quot;$(RepoRoot)src\Tmm.App\Tmm.App.csproj&quot; -c Release -r win-x64 --self-contained false -p:PublishReadyToRun=true -p:Version=$(ProductVersion) -p:DebugType=none -p:DebugSymbols=false -o &quot;$(AppPublishDir)&quot;" />
+    <Exec Command="dotnet publish &quot;$(RepoRoot)src\Tmm.Cli\Tmm.Cli.csproj&quot; -c Release -r win-x64 --self-contained false -p:PublishReadyToRun=true -p:Version=$(ProductVersion) -p:DebugType=none -p:DebugSymbols=false -o &quot;$(AppPublishDir)&quot;" />
+    <Error Condition="!Exists('$(AppPublishDir)TekkenMusicModManager.exe')" Text="Publish did not produce TekkenMusicModManager.exe in $(AppPublishDir)" />
+  </Target>
+
+</Project>

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Single-exe bootstrapper: .NET 8 Desktop Runtime (if missing) + the MSI.
+  The runtime package is Permanent so uninstalling the app leaves .NET alone for other programs.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal"
+     xmlns:netfx="http://wixtoolset.org/schemas/v4/wxs/netfx">
+
+  <Bundle Name="Tekken Music Mod Manager"
+          Manufacturer="Tekken Music Mod Manager"
+          Version="$(var.ProductVersion)"
+          UpgradeCode="6A1C9E3B-7D2F-4B8A-9C5E-1F3D6B8A2C74"
+          Condition="VersionNT64 &gt;= v10.0">
+
+    <BootstrapperApplication>
+      <bal:WixStandardBootstrapperApplication
+          LicenseFile="..\Tmm.Msi\License.rtf"
+          Theme="rtfLicense"
+          ShowVersion="yes"
+          SuppressOptionsUI="yes" />
+    </BootstrapperApplication>
+
+    <Chain>
+      <PackageGroupRef Id="DotNetDesktopRuntime8" />
+      <MsiPackage Id="TmmMsi"
+                  SourceFile="$(var.Tmm.Msi.TargetPath)"
+                  Visible="no"
+                  Compressed="yes"
+                  DisplayInternalUI="no" />
+    </Chain>
+  </Bundle>
+
+  <Fragment>
+    <!-- Highest installed x64 .NET Desktop Runtime 8.x, e.g. "8.0.10"; unset when none. -->
+    <netfx:DotNetCoreSearch Id="DesktopRuntime8Search"
+                            RuntimeType="desktop"
+                            Platform="x64"
+                            MajorVersion="8"
+                            Variable="DesktopRuntime8Version" />
+
+    <PackageGroup Id="DotNetDesktopRuntime8">
+      <ExePackage Id="DotNetDesktopRuntime8Installer"
+                  DisplayName=".NET 8 Desktop Runtime (x64)"
+                  Cache="remove"
+                  Compressed="yes"
+                  PerMachine="yes"
+                  Permanent="yes"
+                  Protocol="burn"
+                  Vital="yes"
+                  DetectCondition="DesktopRuntime8Version &gt;= v8.0.0"
+                  InstallArguments="/install /quiet /norestart"
+                  RepairArguments="/repair /quiet /norestart"
+                  UninstallArguments="/uninstall /quiet /norestart"
+                  SourceFile="$(var.RuntimeInstaller)" />
+    </PackageGroup>
+  </Fragment>
+</Wix>

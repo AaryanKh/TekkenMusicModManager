@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Tmm.Cli</RootNamespace>
+    <AssemblyName>tmm</AssemblyName>
+    <Description>Command line for the Tekken 8 music mod engine. Exercises the full pipeline without the UI.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../data/jukebox_slots.csv" Link="data/jukebox_slots.csv" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../data/stock_catalog.json" Link="data/stock_catalog.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Tmm.Core/Tmm.Core.csproj" />
+  </ItemGroup>
+
+</Project>

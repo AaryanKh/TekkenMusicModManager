@@ -1,0 +1,6 @@
+This file makes Tekken Music Mod Manager run in portable mode.
+
+While it is next to TekkenMusicModManager.exe, all settings, the slot catalog, built mods and
+scratch files are kept in the UserData folder beside the program instead of in
+%LOCALAPPDATA%\TekkenMusicModManager. Delete this file to switch back to the normal per-user
+location.

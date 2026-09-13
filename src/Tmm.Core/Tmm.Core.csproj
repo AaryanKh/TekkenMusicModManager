@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Tmm.Core</RootNamespace>
+    <AssemblyName>Tmm.Core</AssemblyName>
+    <Description>Engine for the Tekken 8 jukebox music mod manager: WEM I/O, catalog, loop fitting, rendering, packing and mod registry. No UI, no NuGet dependencies.</Description>
+  </PropertyGroup>
+
+</Project>

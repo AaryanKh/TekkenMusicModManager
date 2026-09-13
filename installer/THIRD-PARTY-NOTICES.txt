@@ -1,0 +1,27 @@
+Tekken Music Mod Manager - third-party notices
+
+This installer bundles the .NET 8 runtime and WPF (MIT licence, (c) .NET Foundation and
+contributors) together with the application. Nothing else is bundled.
+
+The application depends on two tools that are NOT distributed with it and must be installed
+separately by the user:
+
+  ffmpeg      https://ffmpeg.org  - decodes your audio files. Builds are licensed under the
+              LGPL v2.1+ or GPL v2+/v3 depending on how they were configured. The installer can
+              install the "Gyan.FFmpeg" package through winget; that build and its licence come
+              from gyan.dev, not from this project.
+
+  UnrealPak   part of Unreal Engine, (c) Epic Games. Subject to the Unreal Engine EULA. The app
+              runs the community-distributed build used by the Tekken 8 modding tutorials; obtain
+              it and accept Epic's terms yourself.
+
+Optional:
+
+  Rubber Band Library / rubberband CLI - https://breakfastquay.com/rubberband/ - GPL v2+ (or a
+              commercial licence). Used only when you point the app at a rubberband executable.
+
+The jukebox slot list (data\jukebox_slots.csv) is derived from the community "Jukebox WEM List"
+spreadsheet: IDs and titles only.
+
+TEKKEN is a trademark of Bandai Namco Entertainment Inc. This project is not affiliated with or
+endorsed by Bandai Namco or Epic Games.

@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>Tmm.App</RootNamespace>
+    <AssemblyName>TekkenMusicModManager</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Description>Drag a song in, get a Tekken 8 jukebox mod out.</Description>
+    <!-- Lets `dotnet build` restore the WindowsDesktop reference pack on non-Windows hosts (CI). -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The WindowsDesktop SDK drops System.IO from implicit usings for WPF (Path vs Shapes.Path); put it back. -->
+    <Using Include="System.IO" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../data/jukebox_slots.csv" Link="data/jukebox_slots.csv" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../data/stock_catalog.json" Link="data/stock_catalog.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Tmm.Core/Tmm.Core.csproj" />
+  </ItemGroup>
+
+</Project>

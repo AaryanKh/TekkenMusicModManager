@@ -1,0 +1,23 @@
+<UserControl x:Class="Tmm.App.Views.CreateView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Tmm.App.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DataContext="{d:DesignInstance Type=vm:MainViewModel}">
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="16,10">
+            <StackPanel Orientation="Horizontal">
+                <RadioButton Style="{StaticResource StepButton}" GroupName="step" Content="1  Import a song"
+                             IsChecked="{Binding IsImportStep}" Command="{Binding StepImportCommand}"/>
+                <TextBlock Text="›" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <RadioButton Style="{StaticResource StepButton}" GroupName="step" Content="2  Pick a slot"
+                             IsChecked="{Binding IsRankingStep}" Command="{Binding StepRankingCommand}"/>
+                <TextBlock Text="›" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <RadioButton Style="{StaticResource StepButton}" GroupName="step" Content="3  Edit, preview, build"
+                             IsChecked="{Binding IsEditorStep}" Command="{Binding StepEditorCommand}"/>
+            </StackPanel>
+        </Border>
+        <ContentControl Content="{Binding CurrentStepPage}"/>
+    </DockPanel>
+</UserControl>

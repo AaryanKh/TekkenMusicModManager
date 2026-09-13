@@ -1,0 +1,10 @@
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.idea/
+TestResults/
+*.swp
+installer/Output/
+*.zip

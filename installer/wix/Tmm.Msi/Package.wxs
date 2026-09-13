@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Tekken Music Mod Manager - per-machine MSI.
+  Files come from the publish folder (PublishDir preprocessor variable, set by Tmm.Msi.wixproj).
+  The .NET 8 Desktop Runtime is NOT installed here; Tmm.Bundle chains it in front of this MSI.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <Package Name="Tekken Music Mod Manager"
+           Manufacturer="Tekken Music Mod Manager"
+           Version="$(var.ProductVersion)"
+           UpgradeCode="3F5B2C7A-8D14-4E6B-9A0F-6C2D7E1B4A85"
+           Language="1033"
+           Scope="perMachine"
+           Compressed="yes"
+           InstallerVersion="500">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Tekken Music Mod Manager is already installed."
+                  Schedule="afterInstallInitialize" />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <!-- Program Files\Tekken Music Mod Manager -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Tekken Music Mod Manager" />
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ShortcutFolder" Name="Tekken Music Mod Manager" />
+    </StandardDirectory>
+    <StandardDirectory Id="DesktopFolder" />
+
+    <Feature Id="Main" Title="Tekken Music Mod Manager" Level="1" AllowAbsent="no">
+      <ComponentGroupRef Id="AppFiles" />
+      <ComponentRef Id="StartMenuShortcut" />
+    </Feature>
+    <Feature Id="DesktopShortcutFeature" Title="Desktop shortcut" Level="1">
+      <ComponentRef Id="DesktopShortcut" />
+    </Feature>
+
+    <!-- Standard "choose folder" UI; the bundle wraps this with its own front page. -->
+    <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+
+    <Property Id="ARPNOMODIFY" Value="1" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/" />
+
+    <!-- Uninstall keeps %LOCALAPPDATA%\TekkenMusicModManager (mods, catalog, settings) on purpose. -->
+  </Package>
+
+  <Fragment>
+    <!-- Every file dotnet publish produced, subfolders included (data\jukebox_slots.csv, runtimes\...). -->
+    <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">
+      <Files Include="$(var.PublishDir)**" />
+      <Component Guid="B1D4E6F8-2C3A-4B5D-8E9F-0A1B2C3D4E5F">
+        <File Source="..\..\THIRD-PARTY-NOTICES.txt" />
+      </Component>
+      <Component Guid="C2E5F7A9-3D4B-4C6E-9FA0-1B2C3D4E5F60">
+        <File Source="..\..\..\README.md" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+  <Fragment>
+    <Component Id="StartMenuShortcut" Directory="ShortcutFolder" Guid="9C2E4B7D-1A6F-4D3C-8B5E-7F0A2C4D6E81">
+      <Shortcut Id="StartMenuApp" Name="Tekken Music Mod Manager" Description="Drag a song in, get a Tekken 8 jukebox mod out."
+                Target="[INSTALLFOLDER]TekkenMusicModManager.exe" WorkingDirectory="INSTALLFOLDER" />
+      <Shortcut Id="StartMenuUninstall" Name="Uninstall Tekken Music Mod Manager"
+                Target="[System64Folder]msiexec.exe" Arguments="/x [ProductCode]" />
+      <RemoveFolder Id="RemoveShortcutFolder" On="uninstall" />
+      <RegistryValue Root="HKMU" Key="Software\TekkenMusicModManager" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <Component Id="DesktopShortcut" Directory="DesktopFolder" Guid="5D8A1F3C-6B2E-4A9D-9C7F-3E1B8D4A2F60">
+      <Shortcut Id="DesktopApp" Name="Tekken Music Mod Manager"
+                Target="[INSTALLFOLDER]TekkenMusicModManager.exe" WorkingDirectory="INSTALLFOLDER" />
+      <RegistryValue Root="HKMU" Key="Software\TekkenMusicModManager" Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+  </Fragment>
+</Wix>

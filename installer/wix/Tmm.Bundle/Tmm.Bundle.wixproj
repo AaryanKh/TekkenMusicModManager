@@ -1,0 +1,40 @@
+<Project Sdk="WixToolset.Sdk/5.0.2">
+
+  <!--
+    Burn bundle = the single TekkenMusicModManager-Setup.exe end users run.
+      1. checks for the .NET 8 Desktop Runtime (x64) and installs it if missing (downloaded at build
+         time from Microsoft's stable aka.ms link into redist\, embedded in the exe);
+      2. installs the MSI from Tmm.Msi.
+    Building this project in Visual Studio (or `dotnet build`) publishes the app, builds the MSI,
+    downloads the runtime installer once, and emits the bundle. Set -p:SkipRuntimeDownload=true to
+    use an already-present redist\windowsdesktop-runtime-8.0-win-x64.exe offline.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Bundle</OutputType>
+    <OutputName>TekkenMusicModManager-Setup</OutputName>
+    <ProductVersion Condition="'$(ProductVersion)' == ''">$(Version)</ProductVersion>
+    <ProductVersion Condition="'$(ProductVersion)' == ''">0.1.0</ProductVersion>
+    <RedistDir>$(MSBuildThisFileDirectory)redist\</RedistDir>
+    <RuntimeInstallerUrl>https://aka.ms/dotnet/8.0/windowsdesktop-runtime-win-x64.exe</RuntimeInstallerUrl>
+    <RuntimeInstaller>$(RedistDir)windowsdesktop-runtime-8.0-win-x64.exe</RuntimeInstaller>
+    <DefineConstants>$(DefineConstants);ProductVersion=$(ProductVersion);RuntimeInstaller=$(RuntimeInstaller)</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WixToolset.Bal.wixext" Version="5.0.2" />
+    <PackageReference Include="WixToolset.NetFx.wixext" Version="5.0.2" />
+    <ProjectReference Include="..\Tmm.Msi\Tmm.Msi.wixproj" />
+  </ItemGroup>
+
+  <Target Name="DownloadRuntimeInstaller" BeforeTargets="BeforeBuild" Condition="'$(SkipRuntimeDownload)' != 'true' And !Exists('$(RuntimeInstaller)')">
+    <Message Importance="high" Text="Downloading .NET 8 Desktop Runtime installer from $(RuntimeInstallerUrl)" />
+    <MakeDir Directories="$(RedistDir)" />
+    <DownloadFile SourceUrl="$(RuntimeInstallerUrl)" DestinationFolder="$(RedistDir)" DestinationFileName="windowsdesktop-runtime-8.0-win-x64.exe" Retries="2" />
+  </Target>
+
+  <Target Name="CheckRuntimeInstaller" BeforeTargets="BeforeBuild" AfterTargets="DownloadRuntimeInstaller">
+    <Error Condition="!Exists('$(RuntimeInstaller)')" Text="Missing $(RuntimeInstaller). Download https://dotnet.microsoft.com/download/dotnet/8.0 (Windows Desktop Runtime, x64) to that path, or let the build download it." />
+  </Target>
+
+</Project>

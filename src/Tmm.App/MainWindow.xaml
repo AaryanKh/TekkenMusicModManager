@@ -1,0 +1,55 @@
+<Window x:Class="Tmm.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:Tmm.App.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        d:DataContext="{d:DesignInstance Type=vm:MainViewModel}"
+        Title="{Binding Title}" Height="820" Width="1280" MinHeight="600" MinWidth="960"
+        Background="{StaticResource BgBrush}" WindowStartupLocation="CenterScreen"
+        AllowDrop="True" Drop="OnDrop" DragOver="OnDragOver">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="200"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Sidebar -->
+        <Border Grid.Column="0" Grid.RowSpan="2" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Top" Margin="16,20,16,16">
+                    <TextBlock Text="TEKKEN 8" FontSize="11" Foreground="{StaticResource AccentBrush}" FontWeight="Bold"/>
+                    <TextBlock Text="Music Mod Manager" FontSize="16" FontWeight="SemiBold"/>
+                </StackPanel>
+                <StackPanel DockPanel.Dock="Top">
+                    <RadioButton Style="{StaticResource NavButton}" GroupName="nav" Content="Create a mod"
+                                 IsChecked="{Binding IsCreate}" Command="{Binding GoCreateCommand}"/>
+                    <RadioButton Style="{StaticResource NavButton}" GroupName="nav" Content="Dashboard"
+                                 IsChecked="{Binding IsDashboard}" Command="{Binding GoDashboardCommand}"/>
+                    <RadioButton Style="{StaticResource NavButton}" GroupName="nav" Content="Settings"
+                                 IsChecked="{Binding IsSettings}" Command="{Binding GoSettingsCommand}"/>
+                </StackPanel>
+                <TextBlock DockPanel.Dock="Bottom" Margin="16,0,16,16" Style="{StaticResource Muted}" FontSize="11"
+                           Text="Drop a song anywhere in this window to start."/>
+                <Grid/>
+            </DockPanel>
+        </Border>
+
+        <!-- Page -->
+        <ContentControl Grid.Column="1" Grid.Row="0" Content="{Binding CurrentPage}" Margin="0"/>
+
+        <!-- Status bar -->
+        <Border Grid.Column="1" Grid.Row="1" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="16,6">
+            <DockPanel>
+                <ProgressBar DockPanel.Dock="Right" Width="120" IsIndeterminate="True" Margin="12,0,0,0"
+                             Visibility="{Binding IsBusy, Converter={StaticResource Vis}}"/>
+                <TextBlock Text="{Binding Status}" Style="{StaticResource Muted}" FontSize="12" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>

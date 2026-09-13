@@ -1,0 +1,124 @@
+<UserControl x:Class="Tmm.App.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Tmm.App.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DataContext="{d:DesignInstance Type=vm:SettingsViewModel}">
+    <UserControl.Resources>
+        <Style x:Key="PathRow" TargetType="DockPanel">
+            <Setter Property="Margin" Value="0,0,0,12"/>
+        </Style>
+    </UserControl.Resources>
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="16" MaxWidth="860" HorizontalAlignment="Left">
+            <Grid Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="Settings" Style="{StaticResource H1}"/>
+                    <TextBlock Text="{Binding StorageNote}" Style="{StaticResource Muted}" Margin="0,4,0,0"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                    <Button Content="Revert" Command="{Binding RevertCommand}" Margin="0,0,6,0"/>
+                    <Button Content="Save" Style="{StaticResource AccentButton}" Command="{Binding SaveCommand}" MinWidth="90"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- Game -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,10">
+                <StackPanel>
+                    <TextBlock Text="Game" Style="{StaticResource H2}" Margin="0,0,0,8"/>
+                    <TextBlock Text="TEKKEN 8 folder (…\steamapps\common\TEKKEN 8)" Style="{StaticResource Label}"/>
+                    <DockPanel Style="{StaticResource PathRow}">
+                        <Button DockPanel.Dock="Right" Content="Browse…" Command="{Binding BrowseGameCommand}" Margin="6,0,0,0"/>
+                        <Button DockPanel.Dock="Right" Content="Auto-detect (Steam)" Command="{Binding AutoDetectCommand}" Margin="6,0,0,0"/>
+                        <TextBox Text="{Binding GameRoot, UpdateSourceTrigger=PropertyChanged}"/>
+                    </DockPanel>
+                    <TextBlock Text="{Binding GameStatus}" Style="{StaticResource Muted}" FontSize="12"/>
+                    <TextBlock Style="{StaticResource Muted}" FontSize="12" Margin="0,4,0,0"
+                               Text="Mods are installed to Polaris\Content\Paks\~mods. The tilde matters: paks in plain Mods\ are shadowed by the game's own patch containers for some slots (Spike B, test 8)."/>
+                </StackPanel>
+            </Border>
+
+            <!-- Catalog -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,10">
+                <StackPanel>
+                    <TextBlock Text="Slot catalog" Style="{StaticResource H2}" Margin="0,0,0,4"/>
+                    <TextBlock Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,8"
+                               Text="Exact slot lengths are measured from the game's own stock WEM headers, never transcribed from the spreadsheet. Extract Polaris/Content/WwiseAudio/Media from pakchunk0-Windows.pak with FModel once, point this at the folder, and build. ~886 files, a few seconds."/>
+                    <TextBlock Text="Folder with extracted stock .wem files" Style="{StaticResource Label}"/>
+                    <DockPanel Style="{StaticResource PathRow}">
+                        <Button DockPanel.Dock="Right" Content="Browse…" Command="{Binding BrowseWemFolderCommand}" Margin="6,0,0,0"/>
+                        <Button DockPanel.Dock="Right" Content="Build catalog" Style="{StaticResource AccentButton}" Command="{Binding BuildCatalogCommand}" Margin="6,0,0,0"/>
+                        <TextBox Text="{Binding WemSourceFolder, UpdateSourceTrigger=PropertyChanged}"/>
+                    </DockPanel>
+                    <ProgressBar Value="{Binding Progress, Mode=OneWay}" Maximum="100" Margin="0,0,0,6" Visibility="{Binding IsBuilding, Converter={StaticResource Vis}}"/>
+                    <TextBlock Text="{Binding BuildStatus}" Style="{StaticResource Muted}" FontSize="12" Visibility="{Binding BuildStatus, Converter={StaticResource Vis}}"/>
+                    <TextBlock Text="{Binding CatalogStatus}" FontSize="12"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Tools -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,10">
+                <StackPanel>
+                    <TextBlock Text="External tools" Style="{StaticResource H2}" Margin="0,0,0,8"/>
+
+                    <TextBlock Text="ffmpeg (decodes your songs; blank = use PATH)" Style="{StaticResource Label}"/>
+                    <DockPanel Style="{StaticResource PathRow}">
+                        <Button DockPanel.Dock="Right" Content="Browse…" Command="{Binding BrowseFfmpegCommand}" Margin="6,0,0,0"/>
+                        <Button DockPanel.Dock="Right" Content="Install with winget" Command="{Binding InstallFfmpegCommand}" Margin="6,0,0,0"
+                                ToolTip="Runs: winget install Gyan.FFmpeg (needs internet)"/>
+                        <Button DockPanel.Dock="Right" Content="Check" Command="{Binding CheckFfmpegCommand}" Margin="6,0,0,0"/>
+                        <TextBox Text="{Binding FfmpegPath, UpdateSourceTrigger=PropertyChanged}"/>
+                    </DockPanel>
+                    <TextBlock Text="{Binding FfmpegStatus}" Style="{StaticResource Muted}" FontSize="12" Margin="0,-8,0,10" Visibility="{Binding FfmpegStatus, Converter={StaticResource Vis}}"/>
+
+                    <TextBlock Text="Packer" Style="{StaticResource Label}"/>
+                    <ComboBox ItemsSource="{Binding PackerOptions}" SelectedItem="{Binding Packer}" Width="160" HorizontalAlignment="Left" Margin="0,0,0,12"/>
+
+                    <StackPanel Visibility="{Binding IsUnrealPak, Converter={StaticResource Vis}}">
+                        <TextBlock Text="UnrealPak.exe (community build, e.g. fluffyquack's)" Style="{StaticResource Label}"/>
+                        <DockPanel Style="{StaticResource PathRow}">
+                            <Button DockPanel.Dock="Right" Content="Browse…" Command="{Binding BrowseUnrealPakCommand}" Margin="6,0,0,0"/>
+                            <TextBox Text="{Binding UnrealPakPath, UpdateSourceTrigger=PropertyChanged}"/>
+                        </DockPanel>
+                    </StackPanel>
+                    <StackPanel Visibility="{Binding IsRepak, Converter={StaticResource Vis}}">
+                        <TextBlock Text="repak.exe — needs an in-game confirmation before it becomes the default" Style="{StaticResource Label}"/>
+                        <DockPanel Style="{StaticResource PathRow}">
+                            <Button DockPanel.Dock="Right" Content="Browse…" Command="{Binding BrowseRepakCommand}" Margin="6,0,0,0"/>
+                            <TextBox Text="{Binding RepakPath, UpdateSourceTrigger=PropertyChanged}"/>
+                        </DockPanel>
+                    </StackPanel>
+
+                    <TextBlock Text="rubberband.exe (optional; pitch-preserving time-stretch — without it, stretching shifts pitch)" Style="{StaticResource Label}"/>
+                    <DockPanel Style="{StaticResource PathRow}">
+                        <Button DockPanel.Dock="Right" Content="Browse…" Command="{Binding BrowseRubberBandCommand}" Margin="6,0,0,0"/>
+                        <TextBox Text="{Binding RubberBandPath, UpdateSourceTrigger=PropertyChanged}"/>
+                    </DockPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Fit engine -->
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Fit engine defaults" Style="{StaticResource H2}" Margin="0,0,0,8"/>
+                    <TextBlock Text="Stretch cap — how far a loop may be time-stretched to hit the slot length exactly" Style="{StaticResource Label}"/>
+                    <DockPanel Margin="0,0,0,12">
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding StretchCapPercent, StringFormat={}±{0:0.0}%}" Width="56" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                        <Slider Minimum="0.5" Maximum="15" TickFrequency="0.5" IsSnapToTickEnabled="True" Value="{Binding StretchCapPercent}" Width="300" HorizontalAlignment="Left"/>
+                    </DockPanel>
+                    <DockPanel Margin="0,0,0,12">
+                        <CheckBox Content="Default loudness target for new plans" IsChecked="{Binding UseLoudnessTarget}" VerticalAlignment="Center"/>
+                        <TextBox Width="60" Text="{Binding TargetLufs, StringFormat={}{0:0.0}, UpdateSourceTrigger=LostFocus}" IsEnabled="{Binding UseLoudnessTarget}"/>
+                        <TextBlock Text=" LUFS" Style="{StaticResource Muted}" VerticalAlignment="Center"/>
+                    </DockPanel>
+                    <CheckBox Content="Include coverage (share of the song used) in the compatibility score — taste, not defect" IsChecked="{Binding IncludeCoverage}"/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

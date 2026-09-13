@@ -1,0 +1,74 @@
+<UserControl x:Class="Tmm.App.Views.ImportView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Tmm.App.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DataContext="{d:DesignInstance Type=vm:ImportViewModel}">
+    <Grid Margin="32">
+        <StackPanel VerticalAlignment="Center" MaxWidth="720">
+            <TextBlock Text="Import a song" Style="{StaticResource H1}"/>
+            <TextBlock Style="{StaticResource Muted}" Margin="0,4,0,20"
+                       Text="The song is decoded, beat-tracked and cut into every loop it can naturally produce. Nothing is uploaded; everything runs on this PC."/>
+
+            <Border x:Name="DropZone" AllowDrop="True" Drop="OnDrop" DragOver="OnDragOver"
+                    BorderThickness="2" CornerRadius="8" Padding="32" MinHeight="180">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Background" Value="{StaticResource PanelBrush}"/>
+                        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+                        <Style.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="BorderBrush" Value="{StaticResource MutedBrush}"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="Drop an MP3 / WAV / FLAC / M4A / OGG here" FontSize="16" HorizontalAlignment="Center"/>
+                    <TextBlock Text="or" Style="{StaticResource Muted}" HorizontalAlignment="Center" Margin="0,8"/>
+                    <Button Content="Browse…" Command="{Binding BrowseCommand}" HorizontalAlignment="Center" MinWidth="120"/>
+                    <TextBlock Text="{Binding SongPath}" Style="{StaticResource Muted}" HorizontalAlignment="Center" Margin="0,14,0,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
+                               Visibility="{Binding HasSong, Converter={StaticResource Vis}}"/>
+                </StackPanel>
+            </Border>
+
+            <Grid Margin="0,16,0,0" Visibility="{Binding IsAnalyzing, Converter={StaticResource Vis}}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <ProgressBar Value="{Binding Progress, Mode=OneWay}" Maximum="100"/>
+                    <TextBlock Text="{Binding Status}" Style="{StaticResource Muted}" Margin="0,6,0,0"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="Cancel" Command="{Binding CancelCommand}" Margin="12,0,0,0" VerticalAlignment="Top"/>
+            </Grid>
+
+            <StackPanel Margin="0,16,0,0" Visibility="{Binding HasResult, Converter={StaticResource Vis}}">
+                <TextBlock Text="{Binding Summary}"/>
+                <TextBlock Style="{StaticResource Warning}" Margin="0,6,0,0" Visibility="{Binding LowConfidence, Converter={StaticResource Vis}}"
+                           Text="Beat tracking is unsure about this track (rubato, live or free-tempo material lands here). The recommendations may be off; use the editor to set the loop by ear."/>
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <Button Content="Continue to slot ranking  ›" Style="{StaticResource AccentButton}" Command="{Binding ContinueCommand}"/>
+                    <Button Content="Re-analyze" Command="{Binding AnalyzeCommand}" Margin="8,0,0,0"/>
+                </StackPanel>
+            </StackPanel>
+
+            <TextBlock Text="{Binding Status}" Margin="0,12,0,0">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock" BasedOn="{StaticResource Muted}">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsAnalyzing}" Value="True">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding HasResult}" Value="True">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+        </StackPanel>
+    </Grid>
+</UserControl>

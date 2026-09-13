@@ -1,0 +1,142 @@
+<UserControl x:Class="Tmm.App.Views.DashboardView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Tmm.App.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DataContext="{d:DesignInstance Type=vm:DashboardViewModel}">
+    <DockPanel Margin="16">
+        <!-- Header -->
+        <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="Dashboard" Style="{StaticResource H1}"/>
+                <TextBlock Text="{Binding CountLine}" Style="{StaticResource Muted}" Margin="0,4,0,0"/>
+                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                    <Border Width="8" Height="8" CornerRadius="4" VerticalAlignment="Center" Margin="0,0,6,0">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Background" Value="{StaticResource BadBrush}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding GameOk}" Value="True">
+                                        <Setter Property="Background" Value="{StaticResource GoodBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                    </Border>
+                    <TextBlock Text="{Binding GameStatus}" Style="{StaticResource Muted}" FontSize="12"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,4,0,0" Visibility="{Binding SetupOk, Converter={StaticResource Vis}, ConverterParameter=invert}">
+                    <TextBlock Text="{Binding SetupStatus}" Style="{StaticResource Warning}" FontSize="12" VerticalAlignment="Center"/>
+                    <Button Content="Open Settings" Style="{StaticResource SmallButton}" Command="{Binding GoToSettingsCommand}" Margin="10,0,0,0"/>
+                </StackPanel>
+            </StackPanel>
+            <WrapPanel Grid.Column="1" VerticalAlignment="Top" Margin="12,0,0,0">
+                <Button Content="+  New mod" Style="{StaticResource AccentButton}" Command="{Binding NewModCommand}" Margin="0,0,6,0"/>
+                <Button Content="Refresh" Command="{Binding RefreshCommand}" Margin="0,0,6,0"/>
+                <Button Content="Rebuild all stale" Command="{Binding RebuildStaleCommand}" Margin="0,0,6,0"/>
+                <Button Content="Scan ~mods for other paks" Command="{Binding ScanCommand}" Margin="0,0,6,0"/>
+                <Button Content="Open ~mods" Command="{Binding OpenModsFolderCommand}"/>
+            </WrapPanel>
+        </Grid>
+
+        <!-- Busy -->
+        <Border DockPanel.Dock="Top" Style="{StaticResource Card}" Padding="12,8" Margin="0,0,0,10" Visibility="{Binding IsBusy, Converter={StaticResource Vis}}">
+            <DockPanel>
+                <ProgressBar DockPanel.Dock="Left" Width="140" IsIndeterminate="True" Margin="0,0,12,0"/>
+                <TextBlock Text="{Binding BusyText}"/>
+            </DockPanel>
+        </Border>
+
+        <!-- Third-party paks -->
+        <Border DockPanel.Dock="Bottom" Style="{StaticResource Card}" Padding="12,8" Margin="0,10,0,0" Visibility="{Binding ThirdPartyNote, Converter={StaticResource Vis}}">
+            <StackPanel>
+                <TextBlock Text="{Binding ThirdPartyNote}" Style="{StaticResource Muted}"/>
+                <ItemsControl ItemsSource="{Binding ThirdParty}" Margin="0,4,0,0">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock FontSize="12">
+                                <Run Text="{Binding File, Mode=OneWay}" FontWeight="SemiBold"/><Run Text=" — "/><Run Text="{Binding Count, Mode=OneWay}"/><Run Text=" WEM(s): "/><Run Text="{Binding Ids, Mode=OneWay}"/>
+                            </TextBlock>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+
+        <!-- Empty state -->
+        <Grid>
+            <Border Style="{StaticResource Card}" VerticalAlignment="Center" HorizontalAlignment="Center" Padding="32"
+                    Visibility="{Binding HasMods, Converter={StaticResource Vis}, ConverterParameter=invert}">
+                <StackPanel HorizontalAlignment="Center">
+                    <TextBlock Text="No mods yet" Style="{StaticResource H2}" HorizontalAlignment="Center"/>
+                    <TextBlock Style="{StaticResource Muted}" HorizontalAlignment="Center" Margin="0,6,0,14" TextAlignment="Center" MaxWidth="420"
+                               Text="Drop a song anywhere in this window, pick the jukebox slot it fits best, preview the loop, build. Enabling copies the pak into the game's ~mods folder; disabling removes it, the mod stays here."/>
+                    <Button Content="Create your first mod" Style="{StaticResource AccentButton}" Command="{Binding NewModCommand}" HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Table -->
+            <DataGrid ItemsSource="{Binding Rows}" Visibility="{Binding HasMods, Converter={StaticResource Vis}}" RowDetailsVisibilityMode="VisibleWhenSelected">
+                <DataGrid.Columns>
+                    <DataGridTemplateColumn Header="State" Width="120" SortMemberPath="State">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource Badge}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Border Width="8" Height="8" CornerRadius="4" Margin="0,0,6,0" VerticalAlignment="Center" Background="{Binding State, Converter={StaticResource StateBrush}}"/>
+                                        <TextBlock Text="{Binding StateLabel}" FontSize="12"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTextColumn Header="Mod" Binding="{Binding Name}" Width="180"/>
+                    <DataGridTextColumn Header="Replaces" Binding="{Binding SlotTitle}" Width="*"/>
+                    <DataGridTextColumn Header="Song" Binding="{Binding SongFile}" Width="180"/>
+                    <DataGridTextColumn Header="Last built" Binding="{Binding LastBuilt}" Width="130"/>
+                    <DataGridTemplateColumn Header="Actions" Width="330">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Content="Enable" Style="{StaticResource SmallButton}"
+                                            Command="{Binding DataContext.EnableCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}" CommandParameter="{Binding}"
+                                            Visibility="{Binding IsEnabled, Converter={StaticResource Vis}, ConverterParameter=invert}"/>
+                                    <Button Content="Disable" Style="{StaticResource SmallButton}"
+                                            Command="{Binding DataContext.DisableCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}" CommandParameter="{Binding}"
+                                            Visibility="{Binding IsEnabled, Converter={StaticResource Vis}}"/>
+                                    <Button Content="Rebuild" Style="{StaticResource SmallButton}"
+                                            Command="{Binding DataContext.RebuildCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}" CommandParameter="{Binding}"/>
+                                    <Button Content="Edit" Style="{StaticResource SmallButton}"
+                                            Command="{Binding DataContext.EditCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}" CommandParameter="{Binding}"/>
+                                    <Button Content="Delete" Style="{StaticResource SmallButton}"
+                                            Command="{Binding DataContext.DeleteCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}" CommandParameter="{Binding}"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                </DataGrid.Columns>
+                <DataGrid.RowDetailsTemplate>
+                    <DataTemplate>
+                        <Border Background="{StaticResource BgBrush}" Padding="12,8">
+                            <StackPanel>
+                                <TextBlock Text="{Binding PlanSummary}" FontSize="12"/>
+                                <TextBlock Text="{Binding LoudnessSummary}" FontSize="12" Style="{StaticResource Muted}"
+                                           Visibility="{Binding LoudnessSummary, Converter={StaticResource Vis}}"/>
+                                <TextBlock FontSize="12" Style="{StaticResource Muted}">
+                                    <Run Text="Overrides WEM IDs "/><Run Text="{Binding WemIds, Mode=OneWay}"/><Run Text="  ·  source: "/><Run Text="{Binding SongPath, Mode=OneWay}"/>
+                                </TextBlock>
+                                <TextBlock Text="Source song file is missing — Rebuild and Edit need it." Style="{StaticResource Warning}" FontSize="12"
+                                           Visibility="{Binding SongMissing, Converter={StaticResource Vis}}"/>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </DataGrid.RowDetailsTemplate>
+            </DataGrid>
+        </Grid>
+    </DockPanel>
+</UserControl>

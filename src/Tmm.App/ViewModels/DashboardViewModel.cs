@@ -217,7 +217,16 @@ public sealed class DashboardViewModel : ObservableObject
     private string AdoptRenamed()
     {
         var renamed = Reconcile.FindRenamed(_app.Registry, _app.Settings.GameModsDir);
-        if (renamed.Count == 0) return "";
+        if (renamed.Count == 0)
+        {
+            // Nothing new to claim, but a mod adopted earlier may still be displaying the name it was
+            // built under rather than the one on disk.
+            var synced = Reconcile.SyncNames(_app.Registry);
+            if (synced.Count == 0) return "";
+            Refresh();
+            ModsChanged?.Invoke(this, EventArgs.Empty);
+            return $"  Renamed {synced.Count} mod(s) to match their pak.";
+        }
 
         var nl = Environment.NewLine;
         var preview = string.Join(nl, renamed.Select(r =>

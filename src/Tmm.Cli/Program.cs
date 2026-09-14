@@ -235,7 +235,11 @@ static class Cli
         {
             bool adopt = Flag(args, "--adopt");
             var renamed = Reconcile.FindRenamed(reg, s.GameModsDir);
-            if (renamed.Count == 0) Console.WriteLine("no renamed paks found; every mod matches the name its manifest records");
+            if (renamed.Count == 0)
+            {
+                Console.WriteLine("no renamed paks found; every mod matches the name its manifest records");
+                foreach (var line in Reconcile.SyncNames(reg)) Console.WriteLine("  " + line);
+            }
             else
             {
                 Console.WriteLine($"{renamed.Count} pak(s) in ~mods look like renamed copies of your mods:");

@@ -105,10 +105,55 @@ public static class Reconcile
                 FileOps.DeleteFile(newStore);           // a stale file under the new name would win otherwise
                 FileOps.Move(oldStore, newStore);
             }
+            // The display name follows the file, otherwise the dashboard keeps showing the old one.
+            var stem = StemOf(r.FoundName);
+            var wasCalled = m.Name;
+            if (stem.Length > 0) m.Name = stem;
+
             reg.Save(m);
-            log.Add($"{m.Name}: now '{r.FoundName}' (was '{r.ExpectedName}') — {r.Evidence}.");
+            log.Add($"{wasCalled}: now '{r.FoundName}' (was '{r.ExpectedName}') — {r.Evidence}.");
         }
         return log;
+    }
+
+    /// <summary>
+    /// Bring each mod's display name into line with its pak filename, for mods whose pak was renamed
+    /// rather than generated from the name. Without this the dashboard keeps showing the name the mod
+    /// was built under while the file on disk says something else.
+    ///
+    /// A name that merely differs by sanitising ("My Song!" becoming My_Song_P.pak) is left alone,
+    /// because that pak was still derived from the name and the punctuation is worth keeping.
+    /// </summary>
+    public static List<string> SyncNames(ModRegistry reg)
+    {
+        var log = new List<string>();
+        foreach (var m in reg.All())
+        {
+            if (DerivedFromName(m)) continue;
+
+            var stem = StemOf(m.PakName);
+            if (stem.Length == 0 || stem == m.Name) continue;
+
+            log.Add($"{m.Name} is now shown as {stem}.");
+            m.Name = stem;
+            reg.Save(m);
+        }
+        return log;
+    }
+
+    /// <summary>True when the pak filename is just the mod name run through the usual sanitising, so
+    /// the two are already in step and the name should not be rewritten.</summary>
+    private static bool DerivedFromName(ModManifest m) =>
+        string.Equals(Pak.PakLayout.PakFilename(Pak.PakLayout.SanitizeModName(m.Name)), m.PakName,
+                      StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>"[T7]_Seymour_P.pak" becomes "[T7]_Seymour".</summary>
+    private static string StemOf(string pakName)
+    {
+        var stem = Path.GetFileNameWithoutExtension(pakName);
+        return stem.EndsWith(Constants.PakSuffix, StringComparison.OrdinalIgnoreCase)
+            ? stem[..^Constants.PakSuffix.Length]
+            : stem;
     }
 
     private static bool SameBytes(string a, string b)

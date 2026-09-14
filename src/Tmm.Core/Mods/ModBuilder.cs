@@ -65,7 +65,9 @@ public sealed class ModBuilder
         progress?.Report((2, 4, "Staging"));
         var wems = new Dictionary<int, string> { [slot.Loop.WemId] = result.LoopWem };
         if (result.IntroWem is not null && slot.Intro is not null) wems[slot.Intro.WemId] = result.IntroWem;
-        var staged = PakLayout.Stage(m.Name, wems, Path.Combine(_reg.Settings.ScratchDir, m.ModId));
+        // Sanitised: a display name adopted from a renamed pak can carry characters the mod was never
+        // built with. The folder is scratch only — the pak's real name comes from m.PakName below.
+        var staged = PakLayout.Stage(PakLayout.SanitizeModName(m.Name), wems, Path.Combine(_reg.Settings.ScratchDir, m.ModId));
 
         progress?.Report((3, 4, $"Packing with {_packer.Name}"));
         _packer.Pack(staged, _reg.StorePak(m));

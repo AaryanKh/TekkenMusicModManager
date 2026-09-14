@@ -159,6 +159,58 @@ public class ReconcileTests : IDisposable
     }
 
     [Fact]
+    public void AdoptingAlsoUpdatesTheNameTheDashboardShows()
+    {
+        var m = NewMod("LimitPak", 314901114, 880238603);
+        InstallAs(m, "[T3]_NieRAutomata_CityRuins_P.pak");
+
+        Reconcile.Adopt(_reg, Reconcile.FindRenamed(_reg, _modsDir));
+
+        var reloaded = _reg.Get(m.ModId);
+        Assert.Equal("[T3]_NieRAutomata_CityRuins", reloaded.Name);
+        Assert.Equal("[T3]_NieRAutomata_CityRuins_P.pak", reloaded.PakName);
+    }
+
+    [Fact]
+    public void SyncNamesCatchesUpAModAdoptedBeforeNamesFollowedTheFile()
+    {
+        // The state left by an earlier adoption: pak renamed, display name stale.
+        var m = NewMod("LimitPak", 111111, 222222);
+        m.PakName = "[T3]_Renamed_P.pak";
+        _reg.Save(m);
+
+        var log = Reconcile.SyncNames(_reg);
+
+        Assert.Single(log);
+        Assert.Equal("[T3]_Renamed", _reg.Get(m.ModId).Name);
+    }
+
+    [Fact]
+    public void SyncNamesLeavesANameThatOnlyDiffersBySanitising()
+    {
+        // "My Song!" legitimately packs as My_Song_P.pak. Rewriting the display name to the sanitised
+        // form would throw away punctuation the user typed.
+        var m = NewMod("placeholder", 111111, 222222);
+        m.Name = "My Song!";
+        m.PakName = "My_Song_P.pak";
+        _reg.Save(m);
+
+        Assert.Empty(Reconcile.SyncNames(_reg));
+        Assert.Equal("My Song!", _reg.Get(m.ModId).Name);
+    }
+
+    [Fact]
+    public void SyncNamesIsIdempotent()
+    {
+        var m = NewMod("LimitPak", 111111, 222222);
+        m.PakName = "[T3]_Renamed_P.pak";
+        _reg.Save(m);
+
+        Assert.Single(Reconcile.SyncNames(_reg));
+        Assert.Empty(Reconcile.SyncNames(_reg));
+    }
+
+    [Fact]
     public void APakWearingAnotherModsNameIsNotClaimed()
     {
         // Alpha's pak renamed to exactly Beta's expected filename. That name is already spoken for,

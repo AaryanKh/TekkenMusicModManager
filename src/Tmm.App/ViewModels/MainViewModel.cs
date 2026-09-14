@@ -53,6 +53,7 @@ public sealed class MainViewModel : ObservableObject
         Dashboard.NewModRequested += (_, _) => { Section = Section.Create; Step = CreateStep.Import; };
         Dashboard.ModsChanged += (_, _) => Ranking.RefreshClaims();
         Dashboard.OpenFolderRequested += (_, path) => OpenFolderRequested?.Invoke(this, path);
+        Settings.GameCoversChanged += (_, _) => Dashboard.ReloadGameCovers();
         Settings.Saved += (_, _) => { Status = "Settings saved. " + _app.ReadinessSummary(); Dashboard.Refresh(); if (Ranking.Song is not null) Ranking.Load(Ranking.Song); };
 
         Dashboard.Refresh();

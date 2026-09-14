@@ -249,9 +249,6 @@
                    Visibility="{Binding HasMods, Converter={StaticResource Vis}}">
             <Button DockPanel.Dock="Right" Content="{Binding ViewToggleLabel}" Command="{Binding ToggleViewCommand}"
                     ToolTip="Switch between the table and album-art tiles. Both offer the same actions."/>
-            <Button DockPanel.Dock="Left" Content="Import Tekken covers…" Style="{StaticResource SmallButton}" Command="{Binding ImportTekkenCoversCommand}"
-                    Visibility="{Binding ShowTiles, Converter={StaticResource Vis}}"
-                    ToolTip="Point at a folder of Tekken cover pictures, one per game, named after it (Tekken7.png, TTT2.png…). Export them from your own copy of the game with FModel by searching for 'jukebox'. They replace the drawn cards behind each tile."/>
         </DockPanel>
 
         <!-- Third-party paks -->

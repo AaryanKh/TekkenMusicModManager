@@ -63,6 +63,43 @@
                 </StackPanel>
             </Border>
 
+            <!-- Tekken covers -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,10">
+                <StackPanel>
+                    <TextBlock Text="Tekken covers  —  optional" Style="{StaticResource H2}" Margin="0,0,0,4"/>
+                    <TextBlock Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,8" TextWrapping="Wrap"
+                               Text="The picture shown behind a tile on the dashboard, for the Tekken game whose slot a mod replaces. Each one starts as a drawn placeholder. The games themselves are not in any music catalogue, but their official soundtrack albums are, and that album cover is the same square artwork the in-game jukebox uses — so Find looks the soundtrack up online and lets you choose. Nothing is downloaded until you pick."/>
+                    <ItemsControl ItemsSource="{Binding GameCovers}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="{StaticResource Panel2Brush}" CornerRadius="4" Padding="8,6" Margin="0,0,0,6">
+                                    <DockPanel>
+                                        <Border DockPanel.Dock="Left" Width="44" Height="44" CornerRadius="3" ClipToBounds="True"
+                                                Background="{StaticResource BgBrush}" Margin="0,0,10,0">
+                                            <Image Source="{Binding Image}" Stretch="UniformToFill"/>
+                                        </Border>
+                                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
+                                            <Button Content="Find online…" Style="{StaticResource SmallButton}"
+                                                    Command="{Binding DataContext.FindGameCoverCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding}"/>
+                                            <Button Content="Remove" Style="{StaticResource SmallButton}"
+                                                    Command="{Binding DataContext.RemoveGameCoverCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding}"/>
+                                        </StackPanel>
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Label}" FontWeight="SemiBold" FontSize="12"/>
+                                            <TextBlock Text="{Binding SourceLabel}" Style="{StaticResource Muted}" FontSize="11"/>
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="{Binding CoverStatus}" FontSize="12" Margin="0,2,0,0"
+                               Visibility="{Binding CoverStatus, Converter={StaticResource Vis}}"/>
+                </StackPanel>
+            </Border>
+
             <!-- Tools -->
             <Border Style="{StaticResource Card}" Margin="0,0,0,10">
                 <StackPanel>

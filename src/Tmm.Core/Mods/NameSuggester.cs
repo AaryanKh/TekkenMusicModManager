@@ -31,6 +31,22 @@ public static class NameSuggester
         ["TEKKEN REVOLUTION"] = "TREV",
     };
 
+    /// <summary>Every Tekken game the sheet names, in release order, with the tag used for it.</summary>
+    public static IReadOnlyList<(string Label, string Tag)> Games { get; } = new[]
+    {
+        ("TEKKEN", "T1"),
+        ("TEKKEN 2", "T2"),
+        ("TEKKEN 3", "T3"),
+        ("TEKKEN TAG", "TTT"),
+        ("TEKKEN 4", "T4"),
+        ("TEKKEN 5", "T5"),
+        ("TEKKEN 6", "T6"),
+        ("TEKKEN TAG 2", "TTT2"),
+        ("TEKKEN REVOLUTION", "TREV"),
+        ("TEKKEN 7", "T7"),
+        ("TEKKEN 8", "T8"),
+    };
+
     /// <summary>Folders that say nothing about where the music came from.</summary>
     private static readonly HashSet<string> Generic = new(StringComparer.OrdinalIgnoreCase)
     {

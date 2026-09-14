@@ -87,34 +87,113 @@ public class ArtLookupTests
         Assert.Empty(AlbumArtSearch.ParseItunes("""{"something":"else"}"""));
     }
 
-    // ------------------------------------------------------------------ Tekken cover import
+    // ------------------------------------------------------------------ fallback ladder
 
     [Theory]
-    [InlineData("T_UI_Jukebox_Tekken7.png", "T7")]
-    [InlineData("tk7.png", "T7")]
-    [InlineData("TEKKEN 8.jpg", "T8")]
-    [InlineData("tekken-3.png", "T3")]
-    [InlineData("Tekken Tag Tournament.png", "TTT")]
-    [InlineData("TTT.png", "TTT")]
-    [InlineData("Tekken Tag Tournament 2.png", "TTT2")]
-    [InlineData("ttt2.png", "TTT2")]
-    [InlineData("tekken_tag_2.png", "TTT2")]
-    [InlineData("Tekken Revolution.png", "TREV")]
-    [InlineData("TREV.png", "TREV")]
-    [InlineData("tekken.png", "T1")]
-    public void CoverFilenamesMapToTags(string file, string tag) => Assert.Equal(tag, CoverImport.TagFor(file));
-
-    [Theory]
-    [InlineData("Street Fighter 6.png")]
-    [InlineData("cover.jpg")]
-    [InlineData("t9.png")]
-    public void UnrelatedFilenamesMapToNothing(string file) => Assert.Null(CoverImport.TagFor(file));
+    [InlineData("YuGiOhDuelistsOfTheRoses", "Yu Gi Oh Duelists Of The Roses")]
+    [InlineData("VsLancastrians", "Vs Lancastrians")]
+    [InlineData("DBZBudokai3", "DBZ Budokai 3")]
+    [InlineData("SeymourBattle", "Seymour Battle")]
+    [InlineData("ArrangedByAJURIKA", "Arranged By AJURIKA")]
+    [InlineData("Persona3", "Persona 3")]
+    public void RunTogetherWordsAreSplitBackApart(string input, string expected)
+        => Assert.Equal(expected, AlbumArtSearch.SplitWords(input));
 
     [Fact]
-    public void TagTwoIsNotMistakenForTag()
+    public void TheModsOwnTagIsStrippedBeforeSearching()
     {
-        // The ordering of the rules is what makes this work; pin it.
-        Assert.Equal("TTT2", CoverImport.TagFor("TekkenTag2.png"));
-        Assert.Equal("TTT", CoverImport.TagFor("TekkenTag.png"));
+        // "[TTT]" is ours, not the album's; leaving it in would poison every query.
+        var parts = AlbumArtSearch.ModNameParts("[TTT]_YuGiOhDuelistsOfTheRoses_VsLancastrians");
+        Assert.Equal(new[] { "YuGiOhDuelistsOfTheRoses", "VsLancastrians" }, parts);
+    }
+
+    [Fact]
+    public void TheLadderFallsBackToTheModNameWhenTagsAreMissing()
+    {
+        var ladder = AlbumArtSearch.QueryLadder(SongTags.Empty, "C:/dl/The_Duelists_of_the_Roses.wav",
+                                                "[TTT]_YuGiOhDuelistsOfTheRoses_VsLancastrians");
+        Assert.Contains("Yu Gi Oh Duelists Of The Roses Vs Lancastrians", ladder);
+        Assert.Contains("Yu Gi Oh Duelists Of The Roses", ladder);   // narrower retry
+        Assert.DoesNotContain(ladder, q => q.Contains("[TTT]"));
+    }
+
+    [Fact]
+    public void TaggedFilesStillLeadWithTheirAlbum()
+    {
+        var ladder = AlbumArtSearch.QueryLadder(new SongTags("Seymour Battle", "VA", "Final Fantasy X Original Soundtrack"),
+                                                "C:/x/4-15 - Seymour Battle.flac", "[T7]_SeymourBattle");
+        Assert.Equal("Final Fantasy X Original Soundtrack", ladder[0]);
+        Assert.Contains("Seymour Battle", ladder);                   // the fallback is still there
+    }
+
+    [Fact]
+    public void TheLadderHasNoDuplicatesOrStubs()
+    {
+        var ladder = AlbumArtSearch.QueryLadder(new SongTags("A", "B", "Album"), "C:/x/Album.flac", "[T7]_Album");
+        Assert.Equal(ladder.Count, ladder.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.All(ladder, q => Assert.True(q.Length >= 3));
+    }
+
+    [Fact]
+    public void ANamelessUntaggedSongProducesNoQueriesRatherThanJunk()
+        => Assert.Empty(AlbumArtSearch.QueryLadder(SongTags.Empty, null, null));
+
+    [Fact]
+    public void ResultsClosestToTheQueryScoreHighest()
+    {
+        const string q = "Yu Gi Oh Duelists Of The Roses";
+        var good = AlbumArtSearch.Similarity(q, "Yu-Gi-Oh! The Duelists of the Roses (Original Soundtrack)");
+        var poor = AlbumArtSearch.Similarity(q, "Greatest Hits of the 90s");
+        Assert.True(good > poor, $"{good} should beat {poor}");
+        Assert.InRange(good, 0.8, 1.0);
+    }
+
+    [Fact]
+    public void RankingPutsTheClosestRecordFirst()
+    {
+        // The real failure this guards: "Sonic Heroes Vs Team Battle" returns records, none of them
+        // the right one, so "it returned something" cannot be the stopping rule.
+        var results = new[]
+        {
+            new ArtCandidate("Pokemon X : Ten Years Of Pokemon", "Various", "t1", "f1", "iTunes"),
+            new ArtCandidate("Sonic Heroes Original Soundtrack", "Jun Senoue", "t2", "f2", "iTunes"),
+        };
+        var ranked = AlbumArtSearch.Rank("Sonic Heroes", results);
+        Assert.Equal("Sonic Heroes Original Soundtrack", ranked[0].Title);
+        Assert.True(AlbumArtSearch.Similarity("Sonic Heroes Vs Team Battle", results[0].Title + " " + results[0].Artist)
+                    < AlbumArtSearch.GoodEnough, "an unrelated record must not clear the bar");
+        Assert.True(AlbumArtSearch.Similarity("Sonic Heroes", results[1].Title + " " + results[1].Artist)
+                    >= AlbumArtSearch.GoodEnough, "the right record must clear it");
+    }
+
+    // ------------------------------------------------------------------ Tekken game covers
+
+    [Theory]
+    [InlineData("TEKKEN 7", "TEKKEN 7 Original Soundtrack")]
+    [InlineData("TEKKEN TAG 2", "TEKKEN TAG 2 Original Soundtrack")]
+    [InlineData("TEKKEN REVOLUTION", "TEKKEN REVOLUTION Original Soundtrack")]
+    public void AGameLooksUpItsSoundtrackAlbum(string label, string expected)
+        => Assert.Equal(expected, AlbumArtSearch.GameSoundtrackQuery(label));
+
+    [Fact]
+    public void AnEmptyGameLabelSearchesForNothing()
+    {
+        Assert.Equal("", AlbumArtSearch.GameSoundtrackQuery(""));
+        Assert.Equal("", AlbumArtSearch.GameSoundtrackQuery("   "));
+    }
+
+    [Fact]
+    public void EveryGameInTheListHasAUniqueTagAndASearchableName()
+    {
+        // The settings list is built from this, and each row writes to covers\<tag>: a duplicate tag
+        // would make two games share one picture.
+        var games = NameSuggester.Games;
+        Assert.Equal(11, games.Count);
+        Assert.Equal(games.Count, games.Select(g => g.Tag).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        foreach (var (label, tag) in games)
+        {
+            Assert.Equal(tag, NameSuggester.TagFor(label));            // list and mapper agree
+            Assert.NotEqual("", AlbumArtSearch.GameSoundtrackQuery(label));
+        }
     }
 }

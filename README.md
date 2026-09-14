@@ -147,15 +147,23 @@ the manifest. A file with no picture shows a question mark. In the tile view's a
   the iTunes Search API, and shows the results next to the picture embedded in the file, if any. You
   pick; nothing is applied on its own. This is an optional network call using .NET's built-in HTTP
   client — it adds no installation dependency.
+
+  Untagged files are the normal case, so the search walks a ladder rather than giving up: album and
+  artist, then the album alone, then the mod's own name split back into words
+  (`[TTT]_YuGiOhDuelistsOfTheRoses_VsLancastrians` becomes "Yu Gi Oh Duelists Of The Roses Vs
+  Lancastrians"), then each part of it on its own. Results are scored against the query that found
+  them, and a query whose best hit scores poorly does not end the search — "Sonic Heroes Vs Team
+  Battle" does return records, just unrelated ones, so the ladder keeps widening until "Sonic Heroes"
+  finds the real soundtrack. If nothing ever scores well you still get the best set to choose from.
 - **Remove art** goes back to the placeholder and is remembered.
 
-**Tekken covers.** The game's own jukebox artwork is not shipped and not fetched, since it is Bandai
-Namco's. The card behind each tile is drawn at runtime from the game's name. To use the real covers,
-export them from your own copy of the game with FModel (search for `jukebox`), then press **Import
-Tekken covers…** and point at the folder. Filenames are matched to games loosely — `Tekken7.png`,
-`tk7.png`, `Tekken Tag 2.png` and `TTT2.jpg` all land in the right place — and the pictures are copied
-into `data\covers\` next to the exe, one per tag. Anything already there is used in preference to the
-drawn card.
+**Tekken covers.** The card behind each tile is drawn at runtime from the game's name. The game's own
+jukebox artwork is Bandai Namco's, so it is neither shipped nor scraped. **Settings → Tekken covers**
+lists all eleven games and looks a real cover up on request: the games are not in any music catalogue,
+but their official soundtrack albums are, and that album cover is the same square artwork the in-game
+jukebox uses. You pick from the results, and nothing is downloaded until you do. Remove puts a game
+back to its drawn card. Chosen covers live in `covers\` under the app dir (`UserData\covers` for a
+portable install), not beside the exe, so an installed build in `Program Files` can still write them.
 
 ## Levels
 

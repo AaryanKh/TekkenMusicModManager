@@ -2,11 +2,28 @@ using System.Diagnostics;
 using Tmm.App.Mvvm;
 using Tmm.App.Services;
 using Tmm.Core;
+using System.Collections.ObjectModel;
 using Tmm.Core.Analysis;
 using Tmm.Core.Catalog;
+using Tmm.Core.Mods;
 using Tmm.Core.Steam;
 
 namespace Tmm.App.ViewModels;
+
+/// <summary>One Tekken game in the covers list: its current picture and where that picture came from.</summary>
+public sealed class GameCoverRow : ObservableObject
+{
+    public required string Label { get; init; }
+    public required string Tag { get; init; }
+
+    private System.Windows.Media.ImageSource? _image;
+    public System.Windows.Media.ImageSource? Image { get => _image; set => SetProperty(ref _image, value); }
+
+    private bool _isCustom;
+    public bool IsCustom { get => _isCustom; set { if (SetProperty(ref _isCustom, value)) OnPropertyChanged(nameof(SourceLabel)); } }
+
+    public string SourceLabel => _isCustom ? "chosen picture" : "drawn placeholder";
+}
 
 /// <summary>Game root (auto-detect via Steam libraryfolders.vdf, else browse), packer choice and
 /// path, ffmpeg path, stretch cap default, and an optional catalog rebuild with progress.</summary>
@@ -41,6 +58,11 @@ public sealed class SettingsViewModel : ObservableObject
         BuildCatalogCommand = new AsyncRelayCommand(BuildCatalogAsync, () => !IsBuilding && !string.IsNullOrWhiteSpace(WemSourceFolder));
         CheckFfmpegCommand = new RelayCommand(CheckFfmpeg);
         InstallFfmpegCommand = new AsyncRelayCommand(InstallFfmpegAsync, () => !IsInstallingFfmpeg && WingetAvailable);
+        FindGameCoverCommand = new AsyncRelayCommand(p => FindGameCoverAsync(p as GameCoverRow), p => p is GameCoverRow && !IsFindingCover);
+        RemoveGameCoverCommand = new RelayCommand(p => RemoveGameCover(p as GameCoverRow), p => p is GameCoverRow r && r.IsCustom);
+        foreach (var (label, tag) in NameSuggester.Games)
+            GameCovers.Add(new GameCoverRow { Label = label, Tag = tag });
+        RefreshGameCovers();
         RefreshStatus();
     }
 
@@ -58,6 +80,13 @@ public sealed class SettingsViewModel : ObservableObject
     public AsyncRelayCommand BuildCatalogCommand { get; }
     public RelayCommand CheckFfmpegCommand { get; }
     public AsyncRelayCommand InstallFfmpegCommand { get; }
+    public AsyncRelayCommand FindGameCoverCommand { get; }
+    public RelayCommand RemoveGameCoverCommand { get; }
+
+    /// <summary>Raised when a cover changed, so the dashboard's tiles pick it up.</summary>
+    public event EventHandler? GameCoversChanged;
+
+    public ObservableCollection<GameCoverRow> GameCovers { get; } = new();
 
     public IReadOnlyList<string> PackerOptions => Packers;
 
@@ -101,6 +130,82 @@ public sealed class SettingsViewModel : ObservableObject
                 if (File.Exists(Path.Combine(dir.Trim(), "winget.exe"))) return true;
             return false;
         }
+    }
+
+    private bool _isFindingCover;
+    public bool IsFindingCover
+    {
+        get => _isFindingCover;
+        private set { if (SetProperty(ref _isFindingCover, value)) FindGameCoverCommand.RaiseCanExecuteChanged(); }
+    }
+
+    private string _coverStatus = "";
+    public string CoverStatus { get => _coverStatus; private set => SetProperty(ref _coverStatus, value); }
+
+    private void RefreshGameCovers()
+    {
+        foreach (var r in GameCovers)
+        {
+            r.IsCustom = _app.Covers.HasCustomGameCover(r.Tag);
+            r.Image = _app.Covers.GameCoverFor(r.Tag, r.Label);
+        }
+        RemoveGameCoverCommand.RaiseCanExecuteChanged();
+    }
+
+    /// <summary>
+    /// Look this game's cover up online. The games are not in a music catalogue but their official
+    /// soundtracks are, and that album cover is the square artwork the in-game jukebox shows. The user
+    /// picks from the results; nothing is applied on its own.
+    /// </summary>
+    private async Task FindGameCoverAsync(GameCoverRow? row)
+    {
+        if (row is null) return;
+        IsFindingCover = true;
+        CoverStatus = $"Searching for {row.Label}…";
+        try
+        {
+            var query = AlbumArtSearch.GameSoundtrackQuery(row.Label);
+            var candidates = await AlbumArtSearch.SearchAsync(query, limit: 8);
+            if (candidates.Count == 0)
+            {
+                CoverStatus = $"Nothing found for “{query}”.";
+                return;
+            }
+
+            var chosen = _app.Dialogs.PickArt($"Cover for {row.Label}", candidates);
+            if (chosen is null) { CoverStatus = ""; return; }
+
+            CoverStatus = "Fetching picture…";
+            var bytes = await AlbumArtSearch.DownloadAsync(chosen);
+            _app.Covers.SetGameCover(row.Tag, bytes);
+            RefreshGameCovers();
+            GameCoversChanged?.Invoke(this, EventArgs.Empty);
+            CoverStatus = $"{row.Label}: using “{chosen.Title}”.";
+        }
+        catch (Exception e) when (e is System.Net.Http.HttpRequestException or TaskCanceledException)
+        {
+            CoverStatus = e is TaskCanceledException ? "The search timed out." : "Search failed: " + e.Message;
+        }
+        catch (System.Text.Json.JsonException) { CoverStatus = "The search returned something unreadable."; }
+        catch (TmmException e) { CoverStatus = "Could not save the picture: " + e.Message; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            CoverStatus = "Could not save the picture: " + FileOps.Explain(e);
+        }
+        finally { IsFindingCover = false; }
+    }
+
+    private void RemoveGameCover(GameCoverRow? row)
+    {
+        if (row is null) return;
+        try
+        {
+            _app.Covers.RemoveGameCover(row.Tag);
+            RefreshGameCovers();
+            GameCoversChanged?.Invoke(this, EventArgs.Empty);
+            CoverStatus = $"{row.Label}: back to the drawn placeholder.";
+        }
+        catch (TmmException e) { CoverStatus = "Could not remove it: " + e.Message; }
     }
 
     private static string? Blank(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();

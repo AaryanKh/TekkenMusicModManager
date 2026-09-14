@@ -105,29 +105,48 @@ public sealed class CoverArtService
         return new ArtCandidate("Picture inside the song file", Path.GetFileName(m.SongPath), uri, uri, "embedded");
     }
 
-    // ------------------------------------------------------------------ game cover import
+    // ------------------------------------------------------------------ Tekken game covers
 
-    public static string GameCoversDir => Path.Combine(AppContext.BaseDirectory, "data", "covers");
+    /// <summary>
+    /// Where chosen game covers live. Under the app dir, not next to the exe: an installed build sits
+    /// in Program Files, which is not writable. A folder beside the exe is still read as a fallback so
+    /// anything pre-placed there keeps working.
+    /// </summary>
+    public string GameCoversDir => Path.Combine(_app.Settings.AppDir, "covers");
+    private static string ShippedCoversDir => Path.Combine(AppContext.BaseDirectory, "data", "covers");
 
-    /// <summary>Copy every recognisable picture in <paramref name="folder"/> into the covers folder
-    /// under its tag, and forget the drawn cards so the real ones show. Returns one line per file.</summary>
-    public List<string> ImportGameCovers(string folder)
+    private static readonly string[] ImageExtensions = { ".png", ".jpg", ".jpeg" };
+
+    /// <summary>The file holding this game's chosen cover, or null when it is still the drawn card.</summary>
+    public string? CustomGameCoverPath(string tag)
     {
-        var log = new List<string>();
-        var plan = CoverImport.Plan(folder);
-        if (plan.Count == 0) { log.Add("No .png or .jpg files found in that folder."); return log; }
+        foreach (var dir in new[] { GameCoversDir, ShippedCoversDir })
+            foreach (var ext in ImageExtensions)
+            {
+                var p = Path.Combine(dir, tag + ext);
+                if (File.Exists(p)) return p;
+            }
+        return null;
+    }
+
+    public bool HasCustomGameCover(string tag) => CustomGameCoverPath(tag) is not null;
+
+    /// <summary>Use a picture for this game. Replaces whatever was there under any extension.</summary>
+    public void SetGameCover(string tag, byte[] imageBytes)
+    {
         Directory.CreateDirectory(GameCoversDir);
-        foreach (var (path, tag) in plan)
-        {
-            if (tag is null) { log.Add($"skipped {Path.GetFileName(path)} (no Tekken game in the name)"); continue; }
-            var dest = Path.Combine(GameCoversDir, tag + Path.GetExtension(path).ToLowerInvariant());
-            // A tag may already have a picture under a different extension; the newest import wins.
-            foreach (var ext in CoverImport.ImageExtensions) FileOps.DeleteFile(Path.Combine(GameCoversDir, tag + ext));
-            FileOps.Copy(path, dest);
-            log.Add($"{tag}: {Path.GetFileName(path)}");
-        }
-        _gameCovers.Clear();
-        return log;
+        foreach (var ext in ImageExtensions) FileOps.DeleteFile(Path.Combine(GameCoversDir, tag + ext));
+        var dest = Path.Combine(GameCoversDir, tag + ".jpg");
+        FileOps.PrepareWrite(dest);
+        File.WriteAllBytes(dest, imageBytes);
+        _gameCovers.Remove(tag);
+    }
+
+    /// <summary>Back to the drawn card. Only touches the writable folder.</summary>
+    public void RemoveGameCover(string tag)
+    {
+        foreach (var ext in ImageExtensions) FileOps.DeleteFile(Path.Combine(GameCoversDir, tag + ext));
+        _gameCovers.Remove(tag);
     }
 
     /// <summary>Forget the loaded game cards so the next request reloads them from disk.</summary>
@@ -155,39 +174,37 @@ public sealed class CoverArtService
 
     // ------------------------------------------------------------------ game covers
 
-    /// <summary>The cover for the Tekken game a slot belongs to: the user's PNG if present, else drawn.</summary>
-    public ImageSource GameCover(string gameLabel)
-    {
-        var tag = NameSuggester.TagFor(gameLabel);
-        if (_gameCovers.TryGetValue(tag, out var cached)) return cached;
+    /// <summary>The cover for the Tekken game a slot belongs to: the chosen picture if there is one,
+    /// else the drawn card.</summary>
+    public ImageSource GameCover(string gameLabel) => GameCoverFor(NameSuggester.TagFor(gameLabel), gameLabel);
 
-        var img = LoadUserGameCover(tag, gameLabel) ?? DrawGameCover(tag, gameLabel);
+    public ImageSource GameCoverFor(string tag, string gameLabel)
+    {
+        if (_gameCovers.TryGetValue(tag, out var cached)) return cached;
+        var img = LoadUserGameCover(tag) ?? DrawGameCover(tag, gameLabel);
         _gameCovers[tag] = img;
         return img;
     }
 
-    private static ImageSource? LoadUserGameCover(string tag, string label)
+    private ImageSource? LoadUserGameCover(string tag)
     {
-        var dir = GameCoversDir;
-        foreach (var name in new[] { tag, label })
-            foreach (var ext in new[] { ".png", ".jpg", ".jpeg" })
-            {
-                var p = Path.Combine(dir, name + ext);
-                if (!File.Exists(p)) continue;
-                try
-                {
-                    var bmp = new BitmapImage();
-                    bmp.BeginInit();
-                    bmp.CacheOption = BitmapCacheOption.OnLoad;
-                    bmp.DecodePixelWidth = Size;
-                    bmp.UriSource = new Uri(p, UriKind.Absolute);
-                    bmp.EndInit();
-                    bmp.Freeze();
-                    return bmp;
-                }
-                catch (Exception e) when (e is NotSupportedException or IOException or UnauthorizedAccessException) { }
-            }
-        return null;
+        var p = CustomGameCoverPath(tag);
+        if (p is null) return null;
+        try
+        {
+            var bmp = new BitmapImage();
+            bmp.BeginInit();
+            bmp.CacheOption = BitmapCacheOption.OnLoad;
+            bmp.DecodePixelWidth = Size;
+            bmp.UriSource = new Uri(p, UriKind.Absolute);
+            bmp.EndInit();
+            bmp.Freeze();
+            return bmp;
+        }
+        catch (Exception e) when (e is NotSupportedException or IOException or UnauthorizedAccessException)
+        {
+            return null;    // unreadable picture falls back to the drawn card
+        }
     }
 
     /// <summary>"TEKKEN 7" as a square card in the app's palette, with the tag in the corner.</summary>

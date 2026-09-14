@@ -116,7 +116,6 @@ public sealed class DashboardViewModel : ObservableObject
         ClearSelectionCommand = new RelayCommand(() => SelectedRow = null, () => HasSelection);
         FindArtCommand = new AsyncRelayCommand(p => FindArtAsync(p as ModRow), p => p is ModRow r && !IsBusy && !r.SongMissing);
         RemoveArtCommand = new RelayCommand(p => RemoveArt(p as ModRow), p => p is ModRow r && r.HasOwnArt && !IsBusy);
-        ImportTekkenCoversCommand = new RelayCommand(ImportTekkenCovers, () => !IsBusy);
         _showTiles = _app.Settings.DashboardTiles;
     }
 
@@ -144,7 +143,6 @@ public sealed class DashboardViewModel : ObservableObject
     public RelayCommand ClearSelectionCommand { get; }
     public AsyncRelayCommand FindArtCommand { get; }
     public RelayCommand RemoveArtCommand { get; }
-    public RelayCommand ImportTekkenCoversCommand { get; }
 
     public bool IsBusy { get => _isBusy; private set { if (SetProperty(ref _isBusy, value)) RaiseCommands(); } }
     public string BusyText { get => _busyText; private set => SetProperty(ref _busyText, value); }
@@ -189,7 +187,7 @@ public sealed class DashboardViewModel : ObservableObject
         EditCommand.RaiseCanExecuteChanged(); DeleteCommand.RaiseCanExecuteChanged(); RebuildStaleCommand.RaiseCanExecuteChanged();
         ScanCommand.RaiseCanExecuteChanged(); OpenModsFolderCommand.RaiseCanExecuteChanged();
         ClearSelectionCommand.RaiseCanExecuteChanged(); FindArtCommand.RaiseCanExecuteChanged();
-        RemoveArtCommand.RaiseCanExecuteChanged(); ImportTekkenCoversCommand.RaiseCanExecuteChanged();
+        RemoveArtCommand.RaiseCanExecuteChanged();
     }
 
     public void Refresh()
@@ -207,6 +205,14 @@ public sealed class DashboardViewModel : ObservableObject
         OnPropertyChanged(nameof(HasMods)); OnPropertyChanged(nameof(CountLine));
         SelectedRow = keepId is null ? null : Rows.FirstOrDefault(r => r.Manifest.ModId == keepId);
         RaiseCommands();
+        if (_showTiles) LoadCoversAsync();
+    }
+
+    /// <summary>Drop the cached Tekken cards and re-attach them, after they were changed in Settings.</summary>
+    public void ReloadGameCovers()
+    {
+        _app.Covers.ForgetGameCovers();
+        foreach (var r in Rows) r.GameCover = null;
         if (_showTiles) LoadCoversAsync();
     }
 
@@ -274,9 +280,16 @@ public sealed class DashboardViewModel : ObservableObject
                 var embedded = _app.Covers.EmbeddedCandidate(m);
                 if (embedded is not null) list.Add(embedded);
                 var tags = SongTagReader.Read(m.SongPath, ffmpeg);
-                var q = AlbumArtSearch.BuildQuery(tags, m.SongPath);
+                // Tags first, then the mod's own name and looser pieces of it, until something lands.
+                var ladder = AlbumArtSearch.QueryLadder(tags, m.SongPath, m.Name);
+                var q = ladder.Count > 0 ? ladder[0] : "";
                 string? fail = null;
-                try { list.AddRange(await AlbumArtSearch.SearchAsync(q)); }
+                try
+                {
+                    var (found, used) = await AlbumArtSearch.SearchLadderAsync(ladder);
+                    list.AddRange(found);
+                    if (found.Count > 0) q = used;
+                }
                 catch (Exception e) when (e is System.Net.Http.HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
                 {
                     fail = e is TaskCanceledException ? "The lookup timed out." : e.Message;
@@ -293,9 +306,10 @@ public sealed class DashboardViewModel : ObservableObject
                 return;
             }
 
-            var chosen = _app.Dialogs.PickArt(
-                failure is null ? "Album art for " + m.Name : "Album art for " + m.Name + " (online lookup failed: " + failure + ")",
-                candidates);
+            var heading = "Album art for " + m.Name
+                + (query.Length > 0 ? " — searched for “" + query + "”" : "")
+                + (failure is null ? "" : " (online lookup failed: " + failure + ")");
+            var chosen = _app.Dialogs.PickArt(heading, candidates);
             if (chosen is null) return;
 
             BusyText = "Fetching picture…";
@@ -321,23 +335,6 @@ public sealed class DashboardViewModel : ObservableObject
             Attach(row, null, _app.Covers.Placeholder);
         }
         catch (TmmException e) { _app.Dialogs.ShowError("Could not remove the picture", e.Message); }
-    }
-
-    /// <summary>Point the app at a folder of Tekken cover pictures, usually exported from the game
-    /// with FModel, and file them under their tags. Tiles pick the real cards up on the next hover.</summary>
-    private void ImportTekkenCovers()
-    {
-        var folder = _app.Dialogs.PickFolder("Folder of Tekken cover pictures (named after the game, e.g. Tekken7.png)");
-        if (folder is null) return;
-        try
-        {
-            var log = _app.Covers.ImportGameCovers(folder);
-            foreach (var r in Rows) r.GameCover = null;
-            if (_showTiles) LoadCoversAsync();
-            _app.Dialogs.ShowInfo("Tekken covers", string.Join(Environment.NewLine, log));
-        }
-        catch (TmmException e) { _app.Dialogs.ShowError("Import failed", e.Message); }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { _app.Dialogs.ShowError("Import failed", FileOps.Explain(e)); }
     }
 
     private async Task EnableAsync(ModRow? row)

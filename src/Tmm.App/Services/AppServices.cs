@@ -21,12 +21,14 @@ public sealed class AppServices
     public ModRegistry Registry { get; private set; }
     public IDialogService Dialogs { get; }
     public IAudioPreview Preview { get; }
+    public CoverArtService Covers { get; }
 
     public event EventHandler? SettingsChanged;
 
     public AppServices(IDialogService dialogs, IAudioPreview preview, string? appDir = null)
     {
         Dialogs = dialogs; Preview = preview;
+        Covers = new CoverArtService(this);
         Settings = SettingsStore.Load(appDir);
         if (ApplyInstallHints(Settings) | ApplyGameAutoDetect(Settings))
             SettingsStore.Save(Settings);

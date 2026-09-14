@@ -60,6 +60,9 @@ public sealed class ModBuilder
         progress?.Report((1, 4, "Rendering"));
         var wemDir = _reg.WemDir(m);
         FileOps.DeleteDirectory(wemDir);
+        // The cached album art belongs to the song that was rendered; a rebuild may have a new one.
+        FileOps.DeleteFile(Path.Combine(_reg.ModDir(m), Analysis.CoverArt.FileName));
+        FileOps.DeleteFile(Path.Combine(_reg.ModDir(m), Analysis.CoverArt.NoneMarker));
         var result = RenderPipeline.Render(pcm, slot, m.Plan, wemDir, _stretcher);
 
         progress?.Report((2, 4, "Staging"));

@@ -5,6 +5,121 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DataContext="{d:DesignInstance Type=vm:DashboardViewModel}">
+    <UserControl.Resources>
+        <!-- A tile: the song's art in front, the Tekken game's card peeking out behind it once the tile
+             has focus, an enabled/disabled dot, the name underneath. Everything on it is bound to the
+             same commands the table uses, so the two views cannot drift apart. -->
+        <DataTemplate x:Key="ModTile">
+            <Grid Width="176" Margin="6" Cursor="Hand" Background="Transparent">
+                <Grid.InputBindings>
+                    <MouseBinding Gesture="LeftDoubleClick"
+                                  Command="{Binding DataContext.EditCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                  CommandParameter="{Binding}"/>
+                </Grid.InputBindings>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="176"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- Art stack -->
+                <Grid Grid.Row="0" Margin="12,12,0,0">
+                    <!-- The Tekken cover, tucked up and to the right behind the song's art. Only shown
+                         while the tile is selected or hovered, so a full grid does not read as clutter. -->
+                    <Image Source="{Binding GameCover}" Width="148" Height="148" Stretch="UniformToFill"
+                           HorizontalAlignment="Left" VerticalAlignment="Top" RenderTransformOrigin="0.5,0.5" Opacity="0.95">
+                        <Image.RenderTransform>
+                            <TransformGroup>
+                                <RotateTransform Angle="-7"/>
+                                <TranslateTransform X="14" Y="-14"/>
+                            </TransformGroup>
+                        </Image.RenderTransform>
+                        <Image.Style>
+                            <Style TargetType="Image">
+                                <Setter Property="Visibility" Value="Hidden"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Image.Style>
+                    </Image>
+
+                    <!-- The song's art, grey when the mod is not enabled -->
+                    <Border Width="148" Height="148" HorizontalAlignment="Left" VerticalAlignment="Top" CornerRadius="6"
+                            BorderThickness="1" BorderBrush="{StaticResource BorderBrush}" Background="{StaticResource Panel2Brush}">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="14" ShadowDepth="3" Opacity="0.55"/>
+                        </Border.Effect>
+                        <Border CornerRadius="6" ClipToBounds="True">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Opacity" Value="0.55"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsEnabled}" Value="True">
+                                            <Setter Property="Opacity" Value="1"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <Image Source="{Binding CoverForState}" Stretch="UniformToFill"/>
+                        </Border>
+                    </Border>
+
+                    <!-- Enabled dot, top-right of the art -->
+                    <Ellipse Width="12" Height="12" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="128,8,0,0"
+                             StrokeThickness="2" Stroke="{StaticResource BgBrush}">
+                        <Ellipse.Style>
+                            <Style TargetType="Ellipse">
+                                <Setter Property="Fill" Value="{StaticResource MutedBrush}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsEnabled}" Value="True">
+                                        <Setter Property="Fill" Value="{StaticResource GoodBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Ellipse.Style>
+                    </Ellipse>
+                </Grid>
+
+                <TextBlock Grid.Row="1" Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" MaxHeight="40"
+                           TextTrimming="CharacterEllipsis" Margin="12,8,4,0" ToolTip="{Binding Name}"/>
+                <TextBlock Grid.Row="2" Text="{Binding SlotTitle}" Style="{StaticResource Muted}" FontSize="11"
+                           TextTrimming="CharacterEllipsis" Margin="12,2,4,4" ToolTip="{Binding SlotTitle}"/>
+            </Grid>
+        </DataTemplate>
+
+        <!-- Selection is shown by the game cover appearing and a faint ring, not the stock blue. -->
+        <Style x:Key="TileContainer" TargetType="ListBoxItem">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Bd" CornerRadius="8" BorderThickness="1" BorderBrush="Transparent" Background="Transparent">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource PanelBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource PanelBrush}"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
     <DockPanel Margin="16">
         <!-- Header -->
         <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
@@ -52,6 +167,13 @@
             </DockPanel>
         </Border>
 
+        <!-- View toggle: bottom right, outermost so it stays put whatever else is docked. -->
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0" LastChildFill="False"
+                   Visibility="{Binding HasMods, Converter={StaticResource Vis}}">
+            <Button DockPanel.Dock="Right" Content="{Binding ViewToggleLabel}" Command="{Binding ToggleViewCommand}"
+                    ToolTip="Switch between the table and album-art tiles. Both offer the same actions."/>
+        </DockPanel>
+
         <!-- Third-party paks -->
         <Border DockPanel.Dock="Bottom" Style="{StaticResource Card}" Padding="12,8" Margin="0,10,0,0" Visibility="{Binding ThirdPartyNote, Converter={StaticResource Vis}}">
             <StackPanel>
@@ -68,7 +190,70 @@
             </StackPanel>
         </Border>
 
-        <!-- Empty state -->
+        <!-- Selected tile: details and every action the table row has. Docked under the grid so the
+             tiles keep their space and the panel appears where the eye already is. -->
+        <Border DockPanel.Dock="Bottom" Padding="14,10" Margin="0,10,0,0">
+            <Border.Style>
+                <Style TargetType="Border" BasedOn="{StaticResource Card}">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                    <Style.Triggers>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding ShowTiles}" Value="True"/>
+                                <Condition Binding="{Binding HasSelection}" Value="True"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter Property="Visibility" Value="Visible"/>
+                        </MultiDataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <Grid DataContext="{Binding SelectedRow}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <DockPanel>
+                        <Border Style="{StaticResource Badge}" DockPanel.Dock="Right" Margin="10,0,0,0" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal">
+                                <Border Width="8" Height="8" CornerRadius="4" Margin="0,0,6,0" VerticalAlignment="Center" Background="{Binding State, Converter={StaticResource StateBrush}}"/>
+                                <TextBlock Text="{Binding StateLabel}" FontSize="12"/>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="{Binding Name}" Style="{StaticResource H2}"/>
+                    </DockPanel>
+                    <TextBlock FontSize="12" Style="{StaticResource Muted}" Margin="0,4,0,0">
+                        <Run Text="Replaces "/><Run Text="{Binding SlotTitle, Mode=OneWay}" FontWeight="SemiBold"/><Run Text="  ·  song: "/><Run Text="{Binding SongFile, Mode=OneWay}"/><Run Text="  ·  built "/><Run Text="{Binding LastBuilt, Mode=OneWay}"/>
+                    </TextBlock>
+                    <TextBlock Text="{Binding PlanSummary}" FontSize="12" Margin="0,4,0,0"/>
+                    <TextBlock Text="{Binding LoudnessSummary}" FontSize="12" Style="{StaticResource Muted}"
+                               Visibility="{Binding LoudnessSummary, Converter={StaticResource Vis}}"/>
+                    <TextBlock FontSize="12" Style="{StaticResource Muted}">
+                        <Run Text="Overrides WEM IDs "/><Run Text="{Binding WemIds, Mode=OneWay}"/><Run Text="  ·  source: "/><Run Text="{Binding SongPath, Mode=OneWay}"/>
+                    </TextBlock>
+                    <TextBlock Text="Source song file is missing — Rebuild and Edit need it." Style="{StaticResource Warning}" FontSize="12"
+                               Visibility="{Binding SongMissing, Converter={StaticResource Vis}}"/>
+                    <TextBlock Text="No album art in this file — showing a placeholder." Style="{StaticResource Muted}" FontSize="11" Margin="0,2,0,0"
+                               Visibility="{Binding HasOwnArt, Converter={StaticResource Vis}, ConverterParameter=invert}"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="12,0,0,0">
+                    <Button Content="Enable" Style="{StaticResource SmallButton}"
+                            Command="{Binding DataContext.EnableCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                            Visibility="{Binding IsEnabled, Converter={StaticResource Vis}, ConverterParameter=invert}"/>
+                    <Button Content="Disable" Style="{StaticResource SmallButton}"
+                            Command="{Binding DataContext.DisableCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                            Visibility="{Binding IsEnabled, Converter={StaticResource Vis}}"/>
+                    <Button Content="Rebuild" Style="{StaticResource SmallButton}"
+                            Command="{Binding DataContext.RebuildCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
+                    <Button Content="Edit" Style="{StaticResource SmallButton}"
+                            Command="{Binding DataContext.EditCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
+                    <Button Content="Delete" Style="{StaticResource SmallButton}"
+                            Command="{Binding DataContext.DeleteCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Body: empty state, table, or tiles -->
         <Grid>
             <Border Style="{StaticResource Card}" VerticalAlignment="Center" HorizontalAlignment="Center" Padding="32"
                     Visibility="{Binding HasMods, Converter={StaticResource Vis}, ConverterParameter=invert}">
@@ -81,7 +266,21 @@
             </Border>
 
             <!-- Table -->
-            <DataGrid ItemsSource="{Binding Rows}" Visibility="{Binding HasMods, Converter={StaticResource Vis}}" RowDetailsVisibilityMode="VisibleWhenSelected">
+            <DataGrid ItemsSource="{Binding Rows}" RowDetailsVisibilityMode="VisibleWhenSelected">
+                <DataGrid.Style>
+                    <Style TargetType="DataGrid" BasedOn="{StaticResource {x:Type DataGrid}}">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding HasMods}" Value="True"/>
+                                    <Condition Binding="{Binding ShowTable}" Value="True"/>
+                                </MultiDataTrigger.Conditions>
+                                <Setter Property="Visibility" Value="Visible"/>
+                            </MultiDataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </DataGrid.Style>
                 <DataGrid.Columns>
                     <DataGridTemplateColumn Header="State" Width="120" SortMemberPath="State">
                         <DataGridTemplateColumn.CellTemplate>
@@ -137,6 +336,32 @@
                     </DataTemplate>
                 </DataGrid.RowDetailsTemplate>
             </DataGrid>
+
+            <!-- Tiles -->
+            <ListBox ItemsSource="{Binding Rows}" SelectedItem="{Binding SelectedRow}"
+                     ItemTemplate="{StaticResource ModTile}" ItemContainerStyle="{StaticResource TileContainer}"
+                     Background="Transparent" BorderThickness="0"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto">
+                <ListBox.Style>
+                    <Style TargetType="ListBox">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding HasMods}" Value="True"/>
+                                    <Condition Binding="{Binding ShowTiles}" Value="True"/>
+                                </MultiDataTrigger.Conditions>
+                                <Setter Property="Visibility" Value="Visible"/>
+                            </MultiDataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ListBox.Style>
+                <ListBox.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel Orientation="Horizontal"/>
+                    </ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
+            </ListBox>
         </Grid>
     </DockPanel>
 </UserControl>

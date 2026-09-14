@@ -6,6 +6,29 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DataContext="{d:DesignInstance Type=vm:EditorViewModel}">
+    <UserControl.Resources>
+        <!-- Bulleted versions of the microcopy under each control. Shared so the ⓘ and the control say
+             exactly the same thing. -->
+        <StackPanel x:Key="IntroTip" MaxWidth="360">
+            <TextBlock Text="Where the intro comes from" FontWeight="SemiBold" Margin="0,0,0,6"/>
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,4"><Run Text="•  " FontWeight="Bold"/><Run Text="Real" FontWeight="SemiBold"/><Run Text=" — the music right before the loop start. Needs the loop to begin far enough into the song to leave room."/></TextBlock>
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,4"><Run Text="•  " FontWeight="Bold"/><Run Text="Detached" FontWeight="SemiBold"/><Run Text=" — take the intro from anywhere in the song. Keep the real opening and still loop a later section."/></TextBlock>
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,4"><Run Text="•  " FontWeight="Bold"/><Run Text="Fade in" FontWeight="SemiBold"/><Run Text=" — whatever lead-in exists, padded with silence and faded up."/></TextBlock>
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,4"><Run Text="•  " FontWeight="Bold"/><Run Text="Silence" FontWeight="SemiBold"/><Run Text=" — no intro at all; the loop starts cold."/></TextBlock>
+            <TextBlock TextWrapping="Wrap" Style="{StaticResource Muted}" FontSize="11" Margin="0,4,0,0"
+                       Text="Tick 'Detach intro from the loop' to drag the intro band on the waveform independently."/>
+        </StackPanel>
+        <StackPanel x:Key="VolumeTip" MaxWidth="360">
+            <TextBlock Text="Volume adjustment (gain)" FontWeight="SemiBold" Margin="0,0,0,6"/>
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,4"><Run Text="•  " FontWeight="Bold"/><Run Text="Turns the whole mod up or down. 0 dB means leave it as it is."/></TextBlock>
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,4"><Run Text="•  " FontWeight="Bold"/><Run Text="+6 dB is clearly louder, −6 dB clearly quieter. Small steps go a long way."/></TextBlock>
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,4"><Run Text="•  " FontWeight="Bold"/><Run Text="Applies to the intro and the loop together, so nothing jumps at the handover."/></TextBlock>
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,4"><Run Text="•  " FontWeight="Bold"/><Run Text="It cannot distort. A limiter catches anything that would clip, so past a point it just stops getting louder."/></TextBlock>
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,4"><Run Text="•  " FontWeight="Bold"/><Run Text="Use it when one of your mods sounds quieter than another in game: raise the quiet one."/></TextBlock>
+            <TextBlock TextWrapping="Wrap" Style="{StaticResource Muted}" FontSize="11" Margin="0,4,0,0"
+                       Text="After a preview, the line under the buttons tells you how much of the adjustment actually got through."/>
+        </StackPanel>
+    </UserControl.Resources>
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="16">
             <!-- Header -->
@@ -80,8 +103,13 @@
                         </StackPanel>
 
                         <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,10,12">
-                            <TextBlock Text="Intro" Style="{StaticResource Label}"/>
-                            <ComboBox ItemsSource="{Binding IntroOptions}" SelectedItem="{Binding IntroStrategy}" IsEnabled="{Binding SlotHasIntro}"/>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Intro" Style="{StaticResource Label}"/>
+                                <TextBlock Text=" ⓘ" Style="{StaticResource Muted}" FontSize="11" VerticalAlignment="Center" Cursor="Help"
+                                           ToolTipService.ShowDuration="30000" ToolTip="{StaticResource IntroTip}"/>
+                            </StackPanel>
+                            <ComboBox ItemsSource="{Binding IntroOptions}" SelectedItem="{Binding IntroStrategy}" IsEnabled="{Binding SlotHasIntro}"
+                                      ToolTipService.ShowDuration="30000" ToolTip="{StaticResource IntroTip}"/>
                             <CheckBox Content="Detach intro from the loop" IsChecked="{Binding DetachIntro}" IsEnabled="{Binding SlotHasIntro}" Margin="0,8,0,0"/>
                             <DockPanel Margin="0,6,0,0" IsEnabled="{Binding DetachIntro}">
                                 <TextBlock DockPanel.Dock="Left" Text="from " Style="{StaticResource Muted}" VerticalAlignment="Center"/>
@@ -111,13 +139,18 @@
                         </StackPanel>
 
                         <StackPanel Grid.Row="2" Grid.Column="1" Margin="0,0,0,12">
-                            <TextBlock Text="Volume trim" Style="{StaticResource Label}"/>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Volume adjustment" Style="{StaticResource Label}"/>
+                                <TextBlock Text=" ⓘ" Style="{StaticResource Muted}" FontSize="11" VerticalAlignment="Center" Cursor="Help"
+                                           ToolTipService.ShowDuration="30000" ToolTip="{StaticResource VolumeTip}"/>
+                            </StackPanel>
                             <DockPanel>
                                 <TextBlock DockPanel.Dock="Right" Text="{Binding GainDbText}" Width="56" TextAlignment="Right" VerticalAlignment="Center" Margin="6,0,0,0"/>
-                                <Slider Minimum="-12" Maximum="12" TickFrequency="1" IsSnapToTickEnabled="True" Value="{Binding GainDb}"/>
+                                <Slider Minimum="-12" Maximum="12" TickFrequency="1" IsSnapToTickEnabled="True" Value="{Binding GainDb}"
+                                        ToolTipService.ShowDuration="30000" ToolTip="{StaticResource VolumeTip}"/>
                             </DockPanel>
                             <TextBlock Style="{StaticResource Muted}" FontSize="11" Margin="0,4,0,0"
-                                       Text="Push a quiet mod up to sit level with the rest. A peak limiter catches whatever would clip, so +6 dB is loud, not distorted."/>
+                                       Text="Makes the whole mod louder or quieter. 0 leaves it alone. If one mod sounds quieter than another in game, raise this one. It cannot distort: past a point it simply stops getting louder."/>
                         </StackPanel>
 
                         <StackPanel Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2">

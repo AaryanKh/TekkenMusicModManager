@@ -81,6 +81,8 @@ public sealed class Settings
     public double? TargetLufs { get; set; } = null;
     /// <summary>Optional, off by default: LLM-phrased explanations. Not on the critical path.</summary>
     public bool LlmExplanations { get; set; } = false;
+    /// <summary>Dashboard shows album-art tiles instead of the table. Purely a view preference.</summary>
+    public bool DashboardTiles { get; set; } = false;
 
     [JsonIgnore] public string CatalogPath => Path.Combine(AppDir, "catalog.json");
     /// <summary>Where we keep manifests + rendered WEMs + paks, independent of the game dir.</summary>

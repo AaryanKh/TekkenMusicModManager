@@ -10,7 +10,7 @@ public sealed class ModRow : ObservableObject
 {
     private ModState _state;
     public required ModManifest Manifest { get; init; }
-    public ModState State { get => _state; set { if (SetProperty(ref _state, value)) { OnPropertyChanged(nameof(StateLabel)); OnPropertyChanged(nameof(IsEnabled)); OnPropertyChanged(nameof(CanEnable)); } } }
+    public ModState State { get => _state; set { if (SetProperty(ref _state, value)) { OnPropertyChanged(nameof(StateLabel)); OnPropertyChanged(nameof(IsEnabled)); OnPropertyChanged(nameof(CanEnable)); OnPropertyChanged(nameof(CoverForState)); } } }
 
     public string Name => Manifest.Name;
     public string SlotTitle => Manifest.SlotTitle;
@@ -44,6 +44,29 @@ public sealed class ModRow : ObservableObject
     };
     public bool IsEnabled => State == ModState.Enabled;
     public bool CanEnable => State is ModState.Disabled or ModState.Stale;
+
+    // ------------------------------------------------------------------ tile view
+
+    private System.Windows.Media.ImageSource? _cover;
+    private System.Windows.Media.ImageSource? _coverGray;
+
+    /// <summary>The song's own album art, or the question-mark placeholder. Set after extraction.</summary>
+    public System.Windows.Media.ImageSource? Cover
+    {
+        get => _cover;
+        set { if (SetProperty(ref _cover, value)) { _coverGray = null; OnPropertyChanged(nameof(CoverForState)); OnPropertyChanged(nameof(HasOwnArt)); } }
+    }
+
+    /// <summary>Desaturated copy shown while the mod is not enabled.</summary>
+    public System.Windows.Media.ImageSource? CoverGray { get => _coverGray; set => _coverGray = value; }
+
+    /// <summary>Colour when enabled, grey otherwise, so the dot and the art tell the same story.</summary>
+    public System.Windows.Media.ImageSource? CoverForState => IsEnabled ? _cover : (_coverGray ?? _cover);
+
+    /// <summary>The Tekken game this slot belongs to, drawn behind the tile when it has focus.</summary>
+    public System.Windows.Media.ImageSource? GameCover { get; set; }
+
+    public bool HasOwnArt { get; set; }
 }
 
 public sealed class ThirdPartyRow
@@ -69,6 +92,9 @@ public sealed class DashboardViewModel : ObservableObject
     private string _thirdPartyNote = "";
     private string _setupStatus = "";
     private bool _setupOk;
+    private bool _showTiles;
+    private ModRow? _selectedRow;
+    private int _refreshGeneration;
 
     public DashboardViewModel(AppServices app)
     {
@@ -84,6 +110,8 @@ public sealed class DashboardViewModel : ObservableObject
         OpenModsFolderCommand = new RelayCommand(() => OpenFolderRequested?.Invoke(this, _app.Settings.GameModsDir ?? ""), () => _app.Settings.GameModsDir is not null);
         GoToSettingsCommand = new RelayCommand(() => SettingsRequested?.Invoke(this, EventArgs.Empty));
         NewModCommand = new RelayCommand(() => NewModRequested?.Invoke(this, EventArgs.Empty));
+        ToggleViewCommand = new RelayCommand(() => ShowTiles = !ShowTiles);
+        _showTiles = _app.Settings.DashboardTiles;
     }
 
     public event EventHandler<ModManifest>? EditRequested;
@@ -106,6 +134,7 @@ public sealed class DashboardViewModel : ObservableObject
     public RelayCommand OpenModsFolderCommand { get; }
     public RelayCommand GoToSettingsCommand { get; }
     public RelayCommand NewModCommand { get; }
+    public RelayCommand ToggleViewCommand { get; }
 
     public bool IsBusy { get => _isBusy; private set { if (SetProperty(ref _isBusy, value)) RaiseCommands(); } }
     public string BusyText { get => _busyText; private set => SetProperty(ref _busyText, value); }
@@ -116,6 +145,31 @@ public sealed class DashboardViewModel : ObservableObject
     public string SetupStatus { get => _setupStatus; private set => SetProperty(ref _setupStatus, value); }
     public bool SetupOk { get => _setupOk; private set => SetProperty(ref _setupOk, value); }
     public bool HasMods => Rows.Count > 0;
+
+    /// <summary>Tiles with album art, or the table. Remembered across launches; the app dir is not
+    /// rebuilt for a view preference, so the setting is saved directly.</summary>
+    public bool ShowTiles
+    {
+        get => _showTiles;
+        set
+        {
+            if (!SetProperty(ref _showTiles, value)) return;
+            OnPropertyChanged(nameof(ShowTable)); OnPropertyChanged(nameof(ViewToggleLabel));
+            _app.Settings.DashboardTiles = value;
+            try { SettingsStore.Save(_app.Settings); } catch (TmmException) { /* a view preference is not worth a dialog */ }
+            if (value) LoadCoversAsync();
+        }
+    }
+    public bool ShowTable => !_showTiles;
+    public string ViewToggleLabel => _showTiles ? "☰  Table view" : "▦  Tile view";
+
+    /// <summary>The tile with focus. Its details and actions appear beneath the grid.</summary>
+    public ModRow? SelectedRow
+    {
+        get => _selectedRow;
+        set { if (SetProperty(ref _selectedRow, value)) { OnPropertyChanged(nameof(HasSelection)); RaiseCommands(); } }
+    }
+    public bool HasSelection => _selectedRow is not null;
     public string CountLine => Rows.Count == 0 ? "No mods yet." :
         $"{Rows.Count} mod(s): {Rows.Count(r => r.State == ModState.Enabled)} enabled, {Rows.Count(r => r.State == ModState.Disabled)} disabled, {Rows.Count(r => r.State == ModState.Stale)} need rebuild, {Rows.Count(r => r.State == ModState.Broken)} broken";
 
@@ -134,11 +188,57 @@ public sealed class DashboardViewModel : ObservableObject
                             : "Game folder not set or invalid — set it in Settings before enabling mods.";
         SetupStatus = _app.ReadinessSummary();
         SetupOk = SetupStatus == "Ready.";
+        var keepId = _selectedRow?.Manifest.ModId;
         Rows.Clear();
         foreach (var m in _app.Registry.All())
             Rows.Add(new ModRow { Manifest = m, State = _app.Registry.StateOf(m) });
         OnPropertyChanged(nameof(HasMods)); OnPropertyChanged(nameof(CountLine));
+        SelectedRow = keepId is null ? null : Rows.FirstOrDefault(r => r.Manifest.ModId == keepId);
         RaiseCommands();
+        if (_showTiles) LoadCoversAsync();
+    }
+
+    /// <summary>
+    /// Fill in every tile's pictures. Anything already cached is attached immediately; songs not yet
+    /// checked go through ffmpeg on a worker and land as they finish, so the grid appears at once and
+    /// art fades in behind it. A newer refresh cancels the results of an older one.
+    /// </summary>
+    private void LoadCoversAsync()
+    {
+        var covers = _app.Covers;
+        var placeholder = covers.Placeholder;
+        int generation = ++_refreshGeneration;
+        var rows = Rows.ToList();
+
+        foreach (var row in rows)
+        {
+            row.GameCover ??= covers.GameCover(_app.Catalog.Get(row.Manifest.SlotKey)?.Identity.Game ?? "");
+            if (row.Cover is not null) continue;
+            if (covers.IsCached(row.Manifest)) Attach(row, covers.LoadSongCover(row.Manifest), placeholder);
+        }
+
+        var pending = rows.Where(r => r.Cover is null).ToList();
+        if (pending.Count == 0) return;
+        var ui = SynchronizationContext.Current;
+        Task.Run(() =>
+        {
+            foreach (var row in pending)
+            {
+                if (generation != _refreshGeneration) return;
+                covers.EnsureExtracted(row.Manifest);
+                var art = covers.LoadSongCover(row.Manifest);     // frozen: safe to hand across threads
+                if (ui is null) Attach(row, art, placeholder);
+                else ui.Post(_ => { if (generation == _refreshGeneration) Attach(row, art, placeholder); }, null);
+            }
+        });
+    }
+
+    private void Attach(ModRow row, System.Windows.Media.ImageSource? art, System.Windows.Media.ImageSource placeholder)
+    {
+        row.HasOwnArt = art is not null;
+        var shown = art ?? placeholder;
+        row.CoverGray = _app.Covers.Gray(shown);
+        row.Cover = shown;
     }
 
     private async Task EnableAsync(ModRow? row)

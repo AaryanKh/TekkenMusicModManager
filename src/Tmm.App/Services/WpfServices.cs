@@ -52,6 +52,13 @@ public sealed class MediaPlayerPreview : IAudioPreview
 
     public MediaPlayerPreview()
     {
+        // Built before the handlers that use it. That constructor starts the timer, so stop it again
+        // until something is actually playing.
+        _ticker = new DispatcherTimer(TimeSpan.FromMilliseconds(40), DispatcherPriority.Render,
+                                      (_, _) => PositionChanged?.Invoke(this, EventArgs.Empty),
+                                      Dispatcher.CurrentDispatcher);
+        _ticker.Stop();
+
         // Open() is asynchronous. Starting playback here, rather than straight after the Open call,
         // is what guarantees the file we just asked for is the one that plays — calling Play() too
         // early resumes whatever media was still loaded.
@@ -64,11 +71,6 @@ public sealed class MediaPlayerPreview : IAudioPreview
         };
         _player.MediaEnded += (_, _) => Finish();
         _player.MediaFailed += (_, _) => Finish();
-
-        _ticker = new DispatcherTimer(TimeSpan.FromMilliseconds(40), DispatcherPriority.Render,
-                                      (_, _) => PositionChanged?.Invoke(this, EventArgs.Empty),
-                                      Dispatcher.CurrentDispatcher);
-        _ticker.Stop();
     }
 
     public bool IsPlaying => _playing;

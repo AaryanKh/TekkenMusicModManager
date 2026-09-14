@@ -7,6 +7,7 @@
     <RootNamespace>Tmm.App</RootNamespace>
     <AssemblyName>TekkenMusicModManager</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>app.ico</ApplicationIcon>
     <Description>Drag a song in, get a Tekken 8 jukebox mod out.</Description>
     <!-- Lets `dotnet build` restore the WindowsDesktop reference pack on non-Windows hosts (CI). -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
@@ -16,6 +17,11 @@
   <ItemGroup>
     <!-- The WindowsDesktop SDK drops System.IO from implicit usings for WPF (Path vs Shapes.Path); put it back. -->
     <Using Include="System.IO" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Also embedded as a resource so the Window can use it; ApplicationIcon alone only sets the exe icon. -->
+    <Resource Include="app.ico" />
   </ItemGroup>
 
   <ItemGroup>

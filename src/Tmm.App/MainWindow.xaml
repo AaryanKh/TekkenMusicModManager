@@ -6,7 +6,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         d:DataContext="{d:DesignInstance Type=vm:MainViewModel}"
-        Title="{Binding Title}" Height="820" Width="1280" MinHeight="600" MinWidth="960"
+        Title="{Binding Title}" Icon="app.ico" Height="820" Width="1280" MinHeight="600" MinWidth="960"
         Background="{StaticResource BgBrush}" WindowStartupLocation="CenterScreen"
         AllowDrop="True" Drop="OnDrop" DragOver="OnDragOver">
     <Grid>

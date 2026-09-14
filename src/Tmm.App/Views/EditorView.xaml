@@ -165,13 +165,19 @@
             <Border Style="{StaticResource Card}" Margin="0,10,0,0" Padding="8"
                     Visibility="{Binding HasTrackPreview, Converter={StaticResource Vis}}">
                 <StackPanel>
-                    <TextBlock Text="The track as the game plays it" Style="{StaticResource H2}" Margin="4,0,0,6"/>
+                    <DockPanel Margin="4,0,0,6">
+                        <Button DockPanel.Dock="Right" Content="Skip to the seam" Style="{StaticResource SmallButton}"
+                                Command="{Binding SkipToSeamCommand}"
+                                ToolTip="Jump to a few seconds before the loop wraps, instead of waiting for it."/>
+                        <TextBlock Text="What is playing" Style="{StaticResource H2}" VerticalAlignment="Center"/>
+                    </DockPanel>
                     <ctl:TrackStripControl Height="100"
                                            Peaks="{Binding TrackPeaks}" DurationSec="{Binding TrackDurationSec}"
-                                           Boundaries="{Binding TrackBoundaries}" IntroSec="{Binding IntroLengthSec}"/>
+                                           Boundaries="{Binding TrackBoundaries}" IntroSec="{Binding IntroLengthSec}"
+                                           PlayheadSec="{Binding PlayheadSec}" SeekCommand="{Binding SeekCommand}"/>
                     <TextBlock Text="{Binding TrackSummary}" Style="{StaticResource Muted}" FontSize="11" Margin="4,6,0,0"/>
                     <TextBlock Style="{StaticResource Muted}" FontSize="11" Margin="4,2,0,0"
-                               Text="Amber is the intro WEM, played once. Every dashed line after it is the loop wrapping back on itself, which is the join you are listening for."/>
+                               Text="Amber is the intro WEM, played once. Every dashed line after it is the loop wrapping back on itself, which is the join you are listening for. Click anywhere on the strip to jump there."/>
                 </StackPanel>
             </Border>
 

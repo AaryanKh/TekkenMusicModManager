@@ -18,6 +18,9 @@ namespace Tmm.App.ViewModels;
 public sealed class EditorViewModel : ObservableObject
 {
     public const int WaveformColumns = 1600;
+    /// <summary>Seconds of run-up given when jumping to a seam. Landing exactly on the join means the
+    /// ear has nothing to compare against.</summary>
+    public const double SeamLeadInSec = 4.0;
 
     private readonly AppServices _app;
     private AnalyzedSong? _song;
@@ -49,10 +52,18 @@ public sealed class EditorViewModel : ObservableObject
         PreviewTrackCommand = new AsyncRelayCommand(PreviewTrackAsync, () => HasSong && !IsBusy);
         IntroToSongStartCommand = new RelayCommand(() => IntroSourceStartSec = 0, () => DetachIntro);
         StopCommand = new RelayCommand(() => _app.Preview.Stop());
+        SeekCommand = new RelayCommand(p => { if (p is double sec) _app.Preview.Seek(sec); });
+        SkipToSeamCommand = new RelayCommand(() => { if (FirstSeamSec is double t) _app.Preview.Seek(Math.Max(0, t - SeamLeadInSec)); },
+                                             () => HasSeam && _app.Preview.IsPlaying);
         BuildCommand = new AsyncRelayCommand(BuildAsync, () => HasSong && !IsBusy && CanBuild);
         SavePlanCommand = new RelayCommand(SavePlan, () => _existing is not null && !IsBusy);
         BackCommand = new RelayCommand(() => BackRequested?.Invoke(this, EventArgs.Empty));
-        _app.Preview.PlaybackEnded += (_, _) => OnPropertyChanged(nameof(IsPlaying));
+        _app.Preview.PlaybackEnded += (_, _) =>
+        {
+            OnPropertyChanged(nameof(IsPlaying)); OnPropertyChanged(nameof(PlayheadSec));
+            SkipToSeamCommand.RaiseCanExecuteChanged();
+        };
+        _app.Preview.PositionChanged += (_, _) => OnPropertyChanged(nameof(PlayheadSec));
     }
 
     public event EventHandler<ModManifest>? Built;
@@ -68,6 +79,8 @@ public sealed class EditorViewModel : ObservableObject
     public AsyncRelayCommand PreviewTrackCommand { get; }
     public RelayCommand IntroToSongStartCommand { get; }
     public RelayCommand StopCommand { get; }
+    public RelayCommand SeekCommand { get; }
+    public RelayCommand SkipToSeamCommand { get; }
     public AsyncRelayCommand BuildCommand { get; }
     public RelayCommand SavePlanCommand { get; }
     public RelayCommand BackCommand { get; }
@@ -402,22 +415,17 @@ public sealed class EditorViewModel : ObservableObject
         {
             var plan = _plan.Clone(); var pcm = _song.Pcm; var slot = _slot; var stretcher = _app.Stretcher();
             var cache = _app.Settings.CacheDir;
-            var (path, info, advice) = await Task.Run(() =>
+            var rendered = await Task.Run(() =>
             {
                 var b = RenderPipeline.RenderBuffers(pcm, slot, plan, stretcher);
-                var triple = Verify.PreviewTriple(b.Loop);
-                var full = b.Intro is null ? triple : PcmBuffer.Concat(b.Intro, triple);
-                Directory.CreateDirectory(cache);
-                var p = Path.Combine(cache, $"preview_{Guid.NewGuid():N}.wav");
-                WavIo.WritePcm16(p, full);
+                var (audio, secs) = TrackPreview.Assemble(b.Intro, b.Loop, slot.Loop.SampleRate, repeats: 3);
                 var limit = b.LimiterReductionDb > 0.05 ? $" · limiter −{b.LimiterReductionDb:0.0} dB" : "";
                 var trim = Math.Abs(b.GainDb) > 1e-9 ? $" · trim {b.GainDb:+0.0;-0.0} dB" : "";
-                return (p, $"seam {b.SeamMetric:0.000} (lower is better) · {b.Lufs:0.0} LUFS · peak {b.PeakDbfs:0.0} dBFS{trim}{limit} · stretch via {stretcher.Name}",
-                        AdviceFor(b.GainDb, b.LimiterReductionDb));
+                return Write(audio, secs, cache, "preview",
+                    $"seam {b.SeamMetric:0.000} (lower is better) · {b.Lufs:0.0} LUFS · peak {b.PeakDbfs:0.0} dBFS{trim}{limit} · stretch via {stretcher.Name}",
+                    AdviceFor(b.GainDb, b.LimiterReductionDb));
             });
-            PreviewInfo = info;
-            PreviewAdvice = advice;
-            PlayPreviewFile(path);
+            ShowPreview(rendered);
         }
         catch (TmmException e) { _app.Dialogs.ShowError("Preview failed", e.Message); }
         finally { IsBusy = false; BusyText = ""; }
@@ -440,15 +448,13 @@ public sealed class EditorViewModel : ObservableObject
         {
             var plan = _plan.Clone(); var pcm = _song.Pcm; var slot = _slot; var stretcher = _app.Stretcher();
             var cache = _app.Settings.CacheDir;
-            var (path, info, advice) = await Task.Run(() =>
+            var rendered = await Task.Run(() =>
             {
                 // The whole plan is rendered because the trim and the limiter are decided against the
                 // loop; taking the intro out of a full render is what the game will actually play.
                 var b = RenderPipeline.RenderBuffers(pcm, slot, plan, stretcher);
                 var intro = b.Intro ?? throw new RenderException("this render produced no intro buffer");
-                Directory.CreateDirectory(cache);
-                var p = Path.Combine(cache, $"intro_{Guid.NewGuid():N}.wav");
-                WavIo.WritePcm16(p, intro);
+                var secs = new[] { new TrackSection("Intro", 0, intro.Seconds) };
                 var where = plan.IntroStrategy == IntroStrategy.Detached
                     ? $"cut from {plan.IntroStartSec ?? 0:0.00} s"
                     : $"{plan.IntroStrategy}";
@@ -456,12 +462,11 @@ public sealed class EditorViewModel : ObservableObject
                 double peak = intro.PeakDbfs();
                 // A Silence intro is genuinely empty; saying "peak -∞ dBFS" reads like a failure.
                 var level = double.IsNegativeInfinity(peak) ? "silent" : $"peak {peak:0.0} dBFS";
-                return (p, $"intro only · {intro.Seconds:0.00} s · {where} · {level}{trim}",
-                        AdviceFor(b.GainDb, b.LimiterReductionDb));
+                return Write(intro, secs, cache, "intro",
+                    $"intro only · {intro.Seconds:0.00} s · {where} · {level}{trim}",
+                    AdviceFor(b.GainDb, b.LimiterReductionDb));
             });
-            PreviewInfo = info;
-            PreviewAdvice = advice;
-            PlayPreviewFile(path);
+            ShowPreview(rendered);
         }
         catch (TmmException e) { _app.Dialogs.ShowError("Intro preview failed", e.Message); }
         finally { IsBusy = false; BusyText = ""; }
@@ -497,9 +502,7 @@ public sealed class EditorViewModel : ObservableObject
         _trackPeaks = Array.Empty<float>();
         _trackSections = Array.Empty<TrackSection>();
         _trackDurationSec = 0;
-        OnPropertyChanged(nameof(TrackPeaks)); OnPropertyChanged(nameof(TrackDurationSec));
-        OnPropertyChanged(nameof(TrackSections)); OnPropertyChanged(nameof(TrackBoundaries));
-        OnPropertyChanged(nameof(HasTrackPreview)); OnPropertyChanged(nameof(TrackSummary));
+        RaiseTrackPreview();
     }
 
     /// <summary>
@@ -517,39 +520,90 @@ public sealed class EditorViewModel : ObservableObject
         {
             var plan = _plan.Clone(); var pcm = _song.Pcm; var slot = _slot; var stretcher = _app.Stretcher();
             var cache = _app.Settings.CacheDir;
-            var (path, peaks, sections, seconds, info, advice) = await Task.Run(() =>
+            var rendered = await Task.Run(() =>
             {
                 var b = RenderPipeline.RenderBuffers(pcm, slot, plan, stretcher);
                 int repeats = TrackPreview.RepeatsFor(b.Intro?.Seconds ?? 0, b.Loop.Seconds);
                 var (audio, secs) = TrackPreview.Assemble(b.Intro, b.Loop, slot.Loop.SampleRate, repeats);
-                Directory.CreateDirectory(cache);
-                var p = Path.Combine(cache, $"track_{Guid.NewGuid():N}.wav");
-                WavIo.WritePcm16(p, audio);
                 var limit = b.LimiterReductionDb > 0.05 ? $" · limiter −{b.LimiterReductionDb:0.0} dB" : "";
                 var trim = Math.Abs(b.GainDb) > 1e-9 ? $" · trim {b.GainDb:+0.0;-0.0} dB" : "";
-                return (p, ComputePeaks(audio, WaveformColumns), secs, audio.Seconds,
-                        $"{b.Lufs:0.0} LUFS · peak {b.PeakDbfs:0.0} dBFS{trim}{limit} · seam {b.SeamMetric:0.000}",
-                        AdviceFor(b.GainDb, b.LimiterReductionDb));
+                return Write(audio, secs, cache, "track",
+                    $"{b.Lufs:0.0} LUFS · peak {b.PeakDbfs:0.0} dBFS{trim}{limit} · seam {b.SeamMetric:0.000}",
+                    AdviceFor(b.GainDb, b.LimiterReductionDb));
             });
-            _trackPeaks = peaks; _trackSections = sections; _trackDurationSec = seconds;
-            OnPropertyChanged(nameof(TrackPeaks)); OnPropertyChanged(nameof(TrackDurationSec));
-            OnPropertyChanged(nameof(TrackSections)); OnPropertyChanged(nameof(TrackBoundaries));
-            OnPropertyChanged(nameof(HasTrackPreview)); OnPropertyChanged(nameof(TrackSummary));
-            PreviewInfo = info;
-            PreviewAdvice = advice;
-            PlayPreviewFile(path);
+            ShowPreview(rendered);
         }
         catch (TmmException e) { _app.Dialogs.ShowError("Track preview failed", e.Message); }
         finally { IsBusy = false; BusyText = ""; }
     }
 
+    /// <summary>What every preview produces: a wav to play plus the strip that describes it.</summary>
+    private sealed record Rendered(string Path, float[] Peaks, IReadOnlyList<TrackSection> Sections,
+                                   double Seconds, string Info, string Advice);
+
+    /// <summary>Worker-thread half: write the wav and measure it for the strip.</summary>
+    private static Rendered Write(PcmBuffer audio, IReadOnlyList<TrackSection> sections, string cache,
+                                  string prefix, string info, string advice)
+    {
+        Directory.CreateDirectory(cache);
+        var p = Path.Combine(cache, $"{prefix}_{Guid.NewGuid():N}.wav");
+        WavIo.WritePcm16(p, audio);
+        return new Rendered(p, ComputePeaks(audio, WaveformColumns), sections, audio.Seconds, info, advice);
+    }
+
+    /// <summary>UI-thread half: publish the strip, then play. Every preview goes through here, so the
+    /// strip always describes the audio actually playing.</summary>
+    private void ShowPreview(Rendered r)
+    {
+        _trackPeaks = r.Peaks; _trackSections = r.Sections; _trackDurationSec = r.Seconds;
+        PreviewInfo = r.Info;
+        PreviewAdvice = r.Advice;
+        RaiseTrackPreview();
+        PlayPreviewFile(r.Path);
+    }
+
+    private void RaiseTrackPreview()
+    {
+        OnPropertyChanged(nameof(TrackPeaks)); OnPropertyChanged(nameof(TrackDurationSec));
+        OnPropertyChanged(nameof(TrackSections)); OnPropertyChanged(nameof(TrackBoundaries));
+        OnPropertyChanged(nameof(HasTrackPreview)); OnPropertyChanged(nameof(TrackSummary));
+        OnPropertyChanged(nameof(FirstSeamSec)); OnPropertyChanged(nameof(HasSeam));
+        SkipToSeamCommand.RaiseCanExecuteChanged();
+    }
+
     private void PlayPreviewFile(string path)
     {
+        // Stop first: the player holds the previous file open, so deleting before stopping leaves
+        // stale wavs in the cache.
+        _app.Preview.Stop();
         if (_previewPath is not null) { try { File.Delete(_previewPath); } catch { } }
         _previewPath = path;
         _app.Preview.Play(path);
         OnPropertyChanged(nameof(IsPlaying));
+        OnPropertyChanged(nameof(PlayheadSec));
+        SkipToSeamCommand.RaiseCanExecuteChanged();   // it needs something playing to seek into
     }
+
+    // ------------------------------------------------------------------ transport
+
+    /// <summary>Where playback has reached inside the assembled preview. -1 hides the playhead.</summary>
+    public double PlayheadSec => _app.Preview.IsPlaying ? _app.Preview.PositionSec : -1;
+
+    /// <summary>Start of the first loop wrap, which is the join worth listening to. Null when the
+    /// preview has no seam in it, such as an intro played on its own.</summary>
+    public double? FirstSeamSec
+    {
+        get
+        {
+            // The first boundary after the intro is the intro handover; the one after that is the
+            // loop wrapping onto itself.
+            bool hasIntro = _trackSections.Count > 0 && _trackSections[0].Label == "Intro";
+            int index = hasIntro ? 2 : 1;
+            return index < _trackSections.Count ? _trackSections[index].StartSec : null;
+        }
+    }
+
+    public bool HasSeam => FirstSeamSec is not null;
 
     private async Task BuildAsync()
     {

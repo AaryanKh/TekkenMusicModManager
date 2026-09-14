@@ -233,6 +233,27 @@ public class GainAndIntroTests
     }
 
     [Fact]
+    public void TheFirstLoopWrapIsTheThirdSectionWithAnIntroAndTheSecondWithout()
+    {
+        // The editor's "Skip to the seam" picks a section by index, so the shape of this list is load
+        // bearing: with an intro the first boundary is the intro handover, and the wrap is the next
+        // one along. Off by one here would drop the user on the wrong join.
+        var intro = Tone(2, amp: 0.3f);
+        var loop = Tone(4, amp: 0.3f);
+
+        var (_, withIntro) = TrackPreview.Assemble(intro, loop, Rate, repeats: 3);
+        Assert.Equal("Intro", withIntro[0].Label);
+        Assert.Equal("Loop 1", withIntro[1].Label);
+        Assert.Equal("Loop 2", withIntro[2].Label);
+        Assert.Equal(intro.Seconds + loop.Seconds, withIntro[2].StartSec, 6);
+
+        var (_, noIntro) = TrackPreview.Assemble(null, loop, Rate, repeats: 3);
+        Assert.Equal("Loop 1", noIntro[0].Label);
+        Assert.Equal("Loop 2", noIntro[1].Label);
+        Assert.Equal(loop.Seconds, noIntro[1].StartSec, 6);
+    }
+
+    [Fact]
     public void RepeatCountAlwaysExercisesTheWrapPoint()
     {
         // Even a loop longer than the preview window repeats twice, otherwise the seam never plays.

@@ -121,7 +121,11 @@ public sealed class RepakPacker : IPacker
 /// </summary>
 public static class PakScan
 {
-    private static readonly Regex Ascii = new(@"WwiseAudio/Media/(\d+)\.wem", RegexOptions.Compiled);
+    // The pak index stores the directory once and each entry's filename separately, so the full
+    // "WwiseAudio/Media/<id>.wem" almost never appears as one contiguous string. Matching the
+    // filename alone is what actually finds the IDs. ".wem" after a run of digits is a strong enough
+    // signal on its own: four specific bytes preceded by digits does not occur by chance in a pak.
+    private static readonly Regex Ascii = new(@"(\d+)\.wem", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     public static IReadOnlyList<string> FindWemPaths(string pak)
     {

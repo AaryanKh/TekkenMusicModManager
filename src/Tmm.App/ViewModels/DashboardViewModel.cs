@@ -199,13 +199,41 @@ public sealed class DashboardViewModel : ObservableObject
 
     private void ScanThirdParty()
     {
+        // Renaming a pak by hand leaves the mod reading as Disabled and the file looking third-party.
+        // Reclaim those first, so the third-party list below is genuinely other people's work.
+        string adopted = AdoptRenamed();
+
         ThirdParty.Clear();
         var list = Conflicts.ScanThirdParty(_app.Registry, _app.Settings.GameModsDir);
         foreach (var t in list)
             ThirdParty.Add(new ThirdPartyRow { File = Path.GetFileName(t.Path), Count = t.WemIds.Count, Ids = string.Join(", ", t.WemIds.Take(6)) + (t.WemIds.Count > 6 ? "…" : "") });
         ThirdPartyNote = !_app.Settings.GameRootLooksValid() ? "Game folder not set."
-                       : list.Count == 0 ? "No third-party audio paks found in ~mods."
-                       : $"{list.Count} third-party pak(s) in ~mods override jukebox audio. Their slots are flagged when you enable a mod.";
+                       : list.Count == 0 ? "No third-party audio paks found in ~mods." + adopted
+                       : $"{list.Count} third-party pak(s) in ~mods override jukebox audio. Their slots are flagged when you enable a mod." + adopted;
+    }
+
+    /// <summary>Offer to re-point manifests at paks the user renamed on disk. Returns a note for the
+    /// scan line, empty when there was nothing to do.</summary>
+    private string AdoptRenamed()
+    {
+        var renamed = Reconcile.FindRenamed(_app.Registry, _app.Settings.GameModsDir);
+        if (renamed.Count == 0) return "";
+
+        var nl = Environment.NewLine;
+        var preview = string.Join(nl, renamed.Select(r =>
+            $"  {r.ExpectedName}{nl}      becomes {r.FoundName}{nl}      ({r.Evidence})"));
+        bool ok = _app.Dialogs.Confirm(
+            renamed.Count == 1 ? "A renamed pak was found" : $"{renamed.Count} renamed paks were found",
+            "These paks in ~mods belong to mods you built, under names you changed:" + nl + nl +
+            preview + nl + nl +
+            "Update the mods to use the new names? The copies kept by the app are renamed to match, so " +
+            "rebuilding and enabling keep working. Nothing in the game folder is touched.");
+        if (!ok) return $"  {renamed.Count} renamed pak(s) were left alone.";
+
+        var log = Reconcile.Adopt(_app.Registry, renamed);
+        Refresh();
+        ModsChanged?.Invoke(this, EventArgs.Empty);
+        return $"  Adopted {log.Count} renamed pak(s).";
     }
 
     private async Task RunAsync(string what, Action work)
@@ -216,7 +244,6 @@ public sealed class DashboardViewModel : ObservableObject
         try { await Task.Run(work); }
         catch (TmmException e) { _app.Dialogs.ShowError("Operation failed", e.Message); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { _app.Dialogs.ShowError("Operation failed", FileOps.Explain(e)); }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { _app.Dialogs.ShowError("File error", e.Message); }
         finally
         {
             IsBusy = false; BusyText = "";

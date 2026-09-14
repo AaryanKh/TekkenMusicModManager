@@ -55,6 +55,10 @@ public static class FileOps
     public static void Copy(string source, string dest, bool overwrite = true)
         => Retry(() => { if (overwrite) PrepareWrite(dest); File.Copy(source, dest, overwrite); }, DefaultAttempts, dest);
 
+    /// <summary>Rename or move, clearing ReadOnly on an existing destination first.</summary>
+    public static void Move(string source, string dest)
+        => Retry(() => { PrepareWrite(dest); File.Move(source, dest, overwrite: true); }, DefaultAttempts, dest);
+
     /// <summary>Create a file for writing, clearing ReadOnly on an existing one first.</summary>
     public static FileStream Create(string path)
     {

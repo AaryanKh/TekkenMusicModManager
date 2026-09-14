@@ -63,7 +63,7 @@ static class Cli
         "tmm catalog status\n" +
         "tmm analyze <song> [--top N] [--cap 0.06]\n" +
         "tmm build <song> --slot <loop_id> --name <name> [--bars N] [--start S] [--gain dB] [--intro-start S] [--no-pack]\n" +
-        "tmm mods list | enable <id> | disable <id> | rebuild <id> | delete <id>\n" +
+        "tmm mods list | scan [--adopt] | enable <id> | disable <id> | rebuild <id> | delete <id>\n" +
         "tmm wem dump <file.wem>\n" +
         "tmm find-game\n" +
         "global: --app-dir <dir>");
@@ -220,13 +220,32 @@ static class Cli
     static int Mods(List<string> args, Settings s)
     {
         var reg = new ModRegistry(s);
-        if (args.Count == 0) return Fail("mods list|enable|disable|rebuild|delete");
+        if (args.Count == 0) return Fail("mods list|scan|enable|disable|rebuild|delete");
         if (args[0] == "list")
         {
             var all = reg.All();
             if (all.Count == 0) { Console.WriteLine("no mods built yet"); return 0; }
             foreach (var m in all)
                 Console.WriteLine($"{m.ModId}  {reg.StateOf(m),-8}  {m.Name,-24}  slot {m.SlotKey} ({Trunc(m.SlotTitle, 40)})  {m.Updated:u}");
+            var tp = Conflicts.ScanThirdParty(reg, s.GameModsDir);
+            foreach (var t in tp) Console.WriteLine($"third-party: {Path.GetFileName(t.Path)} overrides {t.WemIds.Count} WEM(s)");
+            return 0;
+        }
+        if (args[0] == "scan")
+        {
+            bool adopt = Flag(args, "--adopt");
+            var renamed = Reconcile.FindRenamed(reg, s.GameModsDir);
+            if (renamed.Count == 0) Console.WriteLine("no renamed paks found; every mod matches the name its manifest records");
+            else
+            {
+                Console.WriteLine($"{renamed.Count} pak(s) in ~mods look like renamed copies of your mods:");
+                foreach (var r in renamed)
+                    Console.WriteLine($"  {r.Mod.Name}: '{r.ExpectedName}' -> '{r.FoundName}'  ({r.Evidence})");
+                if (adopt)
+                    foreach (var line in Reconcile.Adopt(reg, renamed)) Console.WriteLine("  " + line);
+                else
+                    Console.WriteLine("re-run with --adopt to point the manifests at the new names");
+            }
             var tp = Conflicts.ScanThirdParty(reg, s.GameModsDir);
             foreach (var t in tp) Console.WriteLine($"third-party: {Path.GetFileName(t.Path)} overrides {t.WemIds.Count} WEM(s)");
             return 0;

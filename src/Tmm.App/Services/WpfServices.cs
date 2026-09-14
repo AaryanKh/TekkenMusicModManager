@@ -41,6 +41,13 @@ public sealed class WpfDialogService : IDialogService
         var d = new OpenFolderDialog { Title = title, Multiselect = false };
         return (Owner is null ? d.ShowDialog() : d.ShowDialog(Owner)) == true ? d.FolderName : null;
     }
+
+    public Tmm.Core.Analysis.ArtCandidate? PickArt(string title, IReadOnlyList<Tmm.Core.Analysis.ArtCandidate> candidates)
+    {
+        var w = new Views.ArtPickerWindow(title, candidates);
+        if (Owner is not null) w.Owner = Owner;
+        return w.ShowDialog() == true ? w.Chosen : null;
+    }
 }
 
 /// <summary>Preview playback through WPF's MediaPlayer (no extra dependencies).</summary>

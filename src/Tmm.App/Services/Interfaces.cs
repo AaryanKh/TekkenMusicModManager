@@ -9,6 +9,8 @@ public interface IDialogService
     bool Confirm(string title, string message);
     string? PickFile(string title, string filter);
     string? PickFolder(string title);
+    /// <summary>Show candidate pictures and return the one chosen, or null if dismissed.</summary>
+    Tmm.Core.Analysis.ArtCandidate? PickArt(string title, IReadOnlyList<Tmm.Core.Analysis.ArtCandidate> candidates);
 }
 
 public interface IAudioPreview

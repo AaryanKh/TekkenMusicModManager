@@ -74,3 +74,11 @@ public sealed class SecondsConverter : IValueConverter
     }
     public object ConvertBack(object value, Type t, object p, CultureInfo c) => throw new NotSupportedException();
 }
+
+/// <summary>True when any input is true. Lets one trigger drive an animation from either hover or
+/// selection, so leaving the mouse does not collapse a tile that is still selected.</summary>
+public sealed class AnyTrueConverter : IMultiValueConverter
+{
+    public object Convert(object[] values, Type t, object p, CultureInfo c) => values.Any(v => v is true);
+    public object[] ConvertBack(object value, Type[] t, object p, CultureInfo c) => throw new NotSupportedException();
+}

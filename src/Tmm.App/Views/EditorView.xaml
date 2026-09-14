@@ -116,8 +116,6 @@
                                 <Button DockPanel.Dock="Right" Content="Song start" Style="{StaticResource SmallButton}" Command="{Binding IntroToSongStartCommand}" Margin="6,0,0,0"/>
                                 <TextBox Text="{Binding IntroSourceStartSec, StringFormat={}{0:0.000}, UpdateSourceTrigger=LostFocus}"/>
                             </DockPanel>
-                            <TextBlock Style="{StaticResource Muted}" FontSize="11" Margin="0,4,0,0"
-                                       Text="Real = the material right before the loop start. Detach = take the intro from anywhere in the song, so you can keep the real opening and still loop a later section. Fade in = whatever exists, padded with silence. Silence = nothing."/>
                         </StackPanel>
 
                         <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,0,0,12">
@@ -149,8 +147,6 @@
                                 <Slider Minimum="-12" Maximum="12" TickFrequency="1" IsSnapToTickEnabled="True" Value="{Binding GainDb}"
                                         ToolTipService.ShowDuration="30000" ToolTip="{StaticResource VolumeTip}"/>
                             </DockPanel>
-                            <TextBlock Style="{StaticResource Muted}" FontSize="11" Margin="0,4,0,0"
-                                       Text="Makes the whole mod louder or quieter. 0 leaves it alone. If one mod sounds quieter than another in game, raise this one. It cannot distort: past a point it simply stops getting louder."/>
                         </StackPanel>
 
                         <StackPanel Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2">

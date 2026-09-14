@@ -72,6 +72,67 @@ public sealed class CoverArtService
         }
     }
 
+    /// <summary>Use a picture the user chose. Replaces whatever was cached and forgets any
+    /// "no art" marker, so the tile picks it up on the next refresh.</summary>
+    public void SetCover(ModManifest m, byte[] jpegOrPng)
+    {
+        var dir = _app.Registry.ModDir(m);
+        Directory.CreateDirectory(dir);
+        FileOps.DeleteFile(NonePath(m));
+        var path = CoverPath(m);
+        FileOps.PrepareWrite(path);
+        File.WriteAllBytes(path, jpegOrPng);
+    }
+
+    /// <summary>Back to the placeholder. Remembered, so the file's own embedded art is not pulled
+    /// straight back in on the next refresh; "Find art" offers it again as a candidate.</summary>
+    public void RemoveCover(ModManifest m)
+    {
+        FileOps.DeleteFile(CoverPath(m));
+        var dir = _app.Registry.ModDir(m);
+        if (!Directory.Exists(dir)) return;
+        try { File.WriteAllBytes(NonePath(m), Array.Empty<byte>()); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+    }
+
+    /// <summary>The picture embedded in the song, extracted to a scratch file so it can sit in the
+    /// chooser next to online results. Null when the file carries none.</summary>
+    public ArtCandidate? EmbeddedCandidate(ModManifest m)
+    {
+        var scratch = Path.Combine(_app.Settings.ScratchDir, "art", m.ModId + ".jpg");
+        Directory.CreateDirectory(Path.GetDirectoryName(scratch)!);
+        if (!CoverArt.Extract(m.SongPath, _app.Settings.FfmpegExe, scratch)) return null;
+        var uri = new Uri(scratch, UriKind.Absolute).AbsoluteUri;
+        return new ArtCandidate("Picture inside the song file", Path.GetFileName(m.SongPath), uri, uri, "embedded");
+    }
+
+    // ------------------------------------------------------------------ game cover import
+
+    public static string GameCoversDir => Path.Combine(AppContext.BaseDirectory, "data", "covers");
+
+    /// <summary>Copy every recognisable picture in <paramref name="folder"/> into the covers folder
+    /// under its tag, and forget the drawn cards so the real ones show. Returns one line per file.</summary>
+    public List<string> ImportGameCovers(string folder)
+    {
+        var log = new List<string>();
+        var plan = CoverImport.Plan(folder);
+        if (plan.Count == 0) { log.Add("No .png or .jpg files found in that folder."); return log; }
+        Directory.CreateDirectory(GameCoversDir);
+        foreach (var (path, tag) in plan)
+        {
+            if (tag is null) { log.Add($"skipped {Path.GetFileName(path)} (no Tekken game in the name)"); continue; }
+            var dest = Path.Combine(GameCoversDir, tag + Path.GetExtension(path).ToLowerInvariant());
+            // A tag may already have a picture under a different extension; the newest import wins.
+            foreach (var ext in CoverImport.ImageExtensions) FileOps.DeleteFile(Path.Combine(GameCoversDir, tag + ext));
+            FileOps.Copy(path, dest);
+            log.Add($"{tag}: {Path.GetFileName(path)}");
+        }
+        _gameCovers.Clear();
+        return log;
+    }
+
+    /// <summary>Forget the loaded game cards so the next request reloads them from disk.</summary>
+    public void ForgetGameCovers() => _gameCovers.Clear();
+
     // ------------------------------------------------------------------ derived
 
     /// <summary>Desaturated copy for a disabled mod. Cached per source.</summary>
@@ -107,7 +168,7 @@ public sealed class CoverArtService
 
     private static ImageSource? LoadUserGameCover(string tag, string label)
     {
-        var dir = Path.Combine(AppContext.BaseDirectory, "data", "covers");
+        var dir = GameCoversDir;
         foreach (var name in new[] { tag, label })
             foreach (var ext in new[] { ".png", ".jpg", ".jpeg" })
             {

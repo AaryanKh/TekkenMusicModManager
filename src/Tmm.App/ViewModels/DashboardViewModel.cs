@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using Tmm.App.Mvvm;
 using Tmm.App.Services;
 using Tmm.Core;
+using Tmm.Core.Analysis;
 using Tmm.Core.Mods;
 
 namespace Tmm.App.ViewModels;
@@ -64,7 +65,8 @@ public sealed class ModRow : ObservableObject
     public System.Windows.Media.ImageSource? CoverForState => IsEnabled ? _cover : (_coverGray ?? _cover);
 
     /// <summary>The Tekken game this slot belongs to, drawn behind the tile when it has focus.</summary>
-    public System.Windows.Media.ImageSource? GameCover { get; set; }
+    private System.Windows.Media.ImageSource? _gameCover;
+    public System.Windows.Media.ImageSource? GameCover { get => _gameCover; set => SetProperty(ref _gameCover, value); }
 
     public bool HasOwnArt { get; set; }
 }
@@ -111,6 +113,10 @@ public sealed class DashboardViewModel : ObservableObject
         GoToSettingsCommand = new RelayCommand(() => SettingsRequested?.Invoke(this, EventArgs.Empty));
         NewModCommand = new RelayCommand(() => NewModRequested?.Invoke(this, EventArgs.Empty));
         ToggleViewCommand = new RelayCommand(() => ShowTiles = !ShowTiles);
+        ClearSelectionCommand = new RelayCommand(() => SelectedRow = null, () => HasSelection);
+        FindArtCommand = new AsyncRelayCommand(p => FindArtAsync(p as ModRow), p => p is ModRow r && !IsBusy && !r.SongMissing);
+        RemoveArtCommand = new RelayCommand(p => RemoveArt(p as ModRow), p => p is ModRow r && r.HasOwnArt && !IsBusy);
+        ImportTekkenCoversCommand = new RelayCommand(ImportTekkenCovers, () => !IsBusy);
         _showTiles = _app.Settings.DashboardTiles;
     }
 
@@ -135,6 +141,10 @@ public sealed class DashboardViewModel : ObservableObject
     public RelayCommand GoToSettingsCommand { get; }
     public RelayCommand NewModCommand { get; }
     public RelayCommand ToggleViewCommand { get; }
+    public RelayCommand ClearSelectionCommand { get; }
+    public AsyncRelayCommand FindArtCommand { get; }
+    public RelayCommand RemoveArtCommand { get; }
+    public RelayCommand ImportTekkenCoversCommand { get; }
 
     public bool IsBusy { get => _isBusy; private set { if (SetProperty(ref _isBusy, value)) RaiseCommands(); } }
     public string BusyText { get => _busyText; private set => SetProperty(ref _busyText, value); }
@@ -178,6 +188,8 @@ public sealed class DashboardViewModel : ObservableObject
         EnableCommand.RaiseCanExecuteChanged(); DisableCommand.RaiseCanExecuteChanged(); RebuildCommand.RaiseCanExecuteChanged();
         EditCommand.RaiseCanExecuteChanged(); DeleteCommand.RaiseCanExecuteChanged(); RebuildStaleCommand.RaiseCanExecuteChanged();
         ScanCommand.RaiseCanExecuteChanged(); OpenModsFolderCommand.RaiseCanExecuteChanged();
+        ClearSelectionCommand.RaiseCanExecuteChanged(); FindArtCommand.RaiseCanExecuteChanged();
+        RemoveArtCommand.RaiseCanExecuteChanged(); ImportTekkenCoversCommand.RaiseCanExecuteChanged();
     }
 
     public void Refresh()
@@ -239,6 +251,93 @@ public sealed class DashboardViewModel : ObservableObject
         var shown = art ?? placeholder;
         row.CoverGray = _app.Covers.Gray(shown);
         row.Cover = shown;
+        RemoveArtCommand.RaiseCanExecuteChanged();
+    }
+
+    // ------------------------------------------------------------------ album art actions (tile view)
+
+    /// <summary>
+    /// Offer pictures for this mod: the one inside the song file if it has one, then whatever the
+    /// song's tags turn up online. The user picks; nothing is applied without a choice.
+    /// </summary>
+    private async Task FindArtAsync(ModRow? row)
+    {
+        if (row is null) return;
+        var m = row.Manifest;
+        IsBusy = true; BusyText = "Looking for album art…";
+        try
+        {
+            var ffmpeg = _app.Settings.FfmpegExe;
+            var (candidates, query, failure) = await Task.Run(async () =>
+            {
+                var list = new List<ArtCandidate>();
+                var embedded = _app.Covers.EmbeddedCandidate(m);
+                if (embedded is not null) list.Add(embedded);
+                var tags = SongTagReader.Read(m.SongPath, ffmpeg);
+                var q = AlbumArtSearch.BuildQuery(tags, m.SongPath);
+                string? fail = null;
+                try { list.AddRange(await AlbumArtSearch.SearchAsync(q)); }
+                catch (Exception e) when (e is System.Net.Http.HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+                {
+                    fail = e is TaskCanceledException ? "The lookup timed out." : e.Message;
+                }
+                return (list, q, fail);
+            });
+
+            if (candidates.Count == 0)
+            {
+                _app.Dialogs.ShowInfo("No art found",
+                    (failure is null ? "" : "Online lookup failed: " + failure + Environment.NewLine + Environment.NewLine) +
+                    "Nothing was found for “" + query + "” and the song file has no picture inside it." + Environment.NewLine +
+                    "Tagging the file with its album name usually fixes this.");
+                return;
+            }
+
+            var chosen = _app.Dialogs.PickArt(
+                failure is null ? "Album art for " + m.Name : "Album art for " + m.Name + " (online lookup failed: " + failure + ")",
+                candidates);
+            if (chosen is null) return;
+
+            BusyText = "Fetching picture…";
+            var bytes = await AlbumArtSearch.DownloadAsync(chosen);
+            _app.Covers.SetCover(m, bytes);
+            Attach(row, _app.Covers.LoadSongCover(m), _app.Covers.Placeholder);
+        }
+        catch (Exception e) when (e is System.Net.Http.HttpRequestException or TaskCanceledException)
+        {
+            _app.Dialogs.ShowError("Could not fetch the picture", e.Message);
+        }
+        catch (TmmException e) { _app.Dialogs.ShowError("Could not save the picture", e.Message); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { _app.Dialogs.ShowError("Could not save the picture", FileOps.Explain(e)); }
+        finally { IsBusy = false; BusyText = ""; }
+    }
+
+    private void RemoveArt(ModRow? row)
+    {
+        if (row is null) return;
+        try
+        {
+            _app.Covers.RemoveCover(row.Manifest);
+            Attach(row, null, _app.Covers.Placeholder);
+        }
+        catch (TmmException e) { _app.Dialogs.ShowError("Could not remove the picture", e.Message); }
+    }
+
+    /// <summary>Point the app at a folder of Tekken cover pictures, usually exported from the game
+    /// with FModel, and file them under their tags. Tiles pick the real cards up on the next hover.</summary>
+    private void ImportTekkenCovers()
+    {
+        var folder = _app.Dialogs.PickFolder("Folder of Tekken cover pictures (named after the game, e.g. Tekken7.png)");
+        if (folder is null) return;
+        try
+        {
+            var log = _app.Covers.ImportGameCovers(folder);
+            foreach (var r in Rows) r.GameCover = null;
+            if (_showTiles) LoadCoversAsync();
+            _app.Dialogs.ShowInfo("Tekken covers", string.Join(Environment.NewLine, log));
+        }
+        catch (TmmException e) { _app.Dialogs.ShowError("Import failed", e.Message); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { _app.Dialogs.ShowError("Import failed", FileOps.Explain(e)); }
     }
 
     private async Task EnableAsync(ModRow? row)

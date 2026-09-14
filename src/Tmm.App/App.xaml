@@ -14,6 +14,7 @@
             <conv:InverseBoolConverter x:Key="InverseBool"/>
             <conv:VisibilityConverter x:Key="Vis"/>
             <conv:SecondsConverter x:Key="Seconds"/>
+            <conv:AnyTrueConverter x:Key="AnyTrue"/>
             <conv:ModStateBrushConverter x:Key="StateBrush"
                                          Enabled="{StaticResource GoodBrush}" Disabled="{StaticResource MutedBrush}"
                                          Stale="{StaticResource WarnBrush}" Broken="{StaticResource BadBrush}"/>

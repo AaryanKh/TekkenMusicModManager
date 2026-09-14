@@ -132,6 +132,31 @@ State on the dashboard is derived from the filesystem every time; nothing is cac
 shows the loudness of its last render and any volume trim, so two mods that sit at different levels in
 game can be compared without rebuilding either.
 
+## Tile view and album art
+
+The dashboard has a second layout, toggled at the bottom right and remembered across launches. Each
+mod is a tile showing the song's album art, with a dot that is green when enabled and grey otherwise.
+Hovering or selecting a tile lifts the art on a tilted plane and slides the Tekken game's card out from
+behind it; clicking anywhere that is not a tile, or pressing Escape, clears the selection. The selected
+tile's details and every table action sit beneath the grid.
+
+**Where the art comes from.** Song art is pulled from the file itself with ffmpeg and cached beside
+the manifest. A file with no picture shows a question mark. In the tile view's action panel:
+
+- **Find art online…** reads the song's tags with `ffmpeg -f ffmetadata` (no `ffprobe` needed), asks
+  the iTunes Search API, and shows the results next to the picture embedded in the file, if any. You
+  pick; nothing is applied on its own. This is an optional network call using .NET's built-in HTTP
+  client — it adds no installation dependency.
+- **Remove art** goes back to the placeholder and is remembered.
+
+**Tekken covers.** The game's own jukebox artwork is not shipped and not fetched, since it is Bandai
+Namco's. The card behind each tile is drawn at runtime from the game's name. To use the real covers,
+export them from your own copy of the game with FModel (search for `jukebox`), then press **Import
+Tekken covers…** and point at the folder. Filenames are matched to games loosely — `Tekken7.png`,
+`tk7.png`, `Tekken Tag 2.png` and `TTT2.jpg` all land in the right place — and the pictures are copied
+into `data\covers\` next to the exe, one per tag. Anything already there is used in preference to the
+drawn card.
+
 ## Levels
 
 Three separate stages decide how loud a mod ends up, in this order:

@@ -29,10 +29,11 @@
                     <ctl:WaveformControl Height="160"
                                          Peaks="{Binding Peaks}" DurationSec="{Binding DurationSec}" Downbeats="{Binding Downbeats}"
                                          LoopStartSec="{Binding LoopStartSec, Mode=TwoWay}" LoopEndSec="{Binding LoopEndSec}"
-                                         IntroStartSec="{Binding IntroStartSec}" IntroEndSec="{Binding IntroEndSec}" ShowIntro="{Binding SlotHasIntro}"/>
+                                         IntroStartSec="{Binding IntroStartSec, Mode=TwoWay}" IntroEndSec="{Binding IntroEndSec}"
+                                         ShowIntro="{Binding SlotHasIntro}" IntroDraggable="{Binding IntroDraggable}"/>
                     <Grid Margin="4,6,4,0">
                         <TextBlock Style="{StaticResource Muted}" FontSize="11" HorizontalAlignment="Left"
-                                   Text="Drag to move the loop start (snaps to downbeats; hold Ctrl for free placement). Green = loop, amber = intro material, ticks = bars."/>
+                                   Text="{Binding WaveformHint}"/>
                         <TextBlock Style="{StaticResource Muted}" FontSize="11" HorizontalAlignment="Right" Text="{Binding DurationSec, Converter={StaticResource Seconds}}"/>
                     </Grid>
                 </StackPanel>
@@ -121,6 +122,7 @@
 
                         <StackPanel Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2">
                             <StackPanel Orientation="Horizontal">
+                                <Button Content="▶  Preview intro" Command="{Binding PreviewIntroCommand}" Margin="0,0,6,0"/>
                                 <Button Content="▶  Preview loop ×3" Command="{Binding PreviewCommand}"/>
                                 <Button Content="▶  Preview full track" Command="{Binding PreviewTrackCommand}" Margin="6,0,0,0"/>
                                 <Button Content="■  Stop" Command="{Binding StopCommand}" Margin="6,0,0,0" IsEnabled="{Binding IsPlaying}"/>

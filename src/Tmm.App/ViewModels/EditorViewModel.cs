@@ -44,6 +44,7 @@ public sealed class EditorViewModel : ObservableObject
         BarsDownCommand = new RelayCommand(() => LoopBars -= 1, () => HasSong && LoopBars > 1);
         SnapCommand = new RelayCommand(() => { if (_song is not null) LoopStartSec = _song.Analysis.Grid.SnapToDownbeat(LoopStartSec); }, () => HasSong);
         ResetCommand = new RelayCommand(ResetToRecommendation, () => _recommended is not null);
+        PreviewIntroCommand = new AsyncRelayCommand(PreviewIntroAsync, () => HasSong && !IsBusy && SlotHasIntro);
         PreviewCommand = new AsyncRelayCommand(PreviewAsync, () => HasSong && !IsBusy);
         PreviewTrackCommand = new AsyncRelayCommand(PreviewTrackAsync, () => HasSong && !IsBusy);
         IntroToSongStartCommand = new RelayCommand(() => IntroSourceStartSec = 0, () => DetachIntro);
@@ -62,6 +63,7 @@ public sealed class EditorViewModel : ObservableObject
     public RelayCommand BarsDownCommand { get; }
     public RelayCommand SnapCommand { get; }
     public RelayCommand ResetCommand { get; }
+    public AsyncRelayCommand PreviewIntroCommand { get; }
     public AsyncRelayCommand PreviewCommand { get; }
     public AsyncRelayCommand PreviewTrackCommand { get; }
     public RelayCommand IntroToSongStartCommand { get; }
@@ -119,7 +121,7 @@ public sealed class EditorViewModel : ObservableObject
         OnPropertyChanged(null);   // everything
         BarsUpCommand.RaiseCanExecuteChanged(); BarsDownCommand.RaiseCanExecuteChanged(); SnapCommand.RaiseCanExecuteChanged();
         ResetCommand.RaiseCanExecuteChanged(); PreviewCommand.RaiseCanExecuteChanged(); BuildCommand.RaiseCanExecuteChanged();
-        SavePlanCommand.RaiseCanExecuteChanged(); PreviewTrackCommand.RaiseCanExecuteChanged();
+        SavePlanCommand.RaiseCanExecuteChanged(); PreviewTrackCommand.RaiseCanExecuteChanged(); PreviewIntroCommand.RaiseCanExecuteChanged();
         IntroToSongStartCommand.RaiseCanExecuteChanged();
     }
 
@@ -270,7 +272,7 @@ public sealed class EditorViewModel : ObservableObject
         ClearTrackPreview();           // the assembled track no longer matches the plan
         OnPropertyChanged(null);
         BarsDownCommand.RaiseCanExecuteChanged(); BuildCommand.RaiseCanExecuteChanged();
-        IntroToSongStartCommand.RaiseCanExecuteChanged();
+        IntroToSongStartCommand.RaiseCanExecuteChanged(); PreviewIntroCommand.RaiseCanExecuteChanged();
     }
 
     // ------------------------------------------------------------------ derived
@@ -280,10 +282,25 @@ public sealed class EditorViewModel : ObservableObject
     public double IntroLengthSec => _slot?.IntroSeconds ?? 0;
 
     /// <summary>Start of the amber intro region drawn on the waveform. For a detached intro that is
-    /// wherever the user put it; otherwise it is the material immediately before the loop.</summary>
-    public double IntroStartSec => _slot is null || !_slot.HasIntro ? _plan.LoopStartSec
-        : DetachIntro ? IntroSourceStartSec
-        : _plan.LoopStartSec - _slot.IntroSeconds;
+    /// wherever the user put it; otherwise it is the material immediately before the loop.
+    /// Settable so the waveform can drag it, which only means anything while detached — an attached
+    /// intro has no position of its own and follows the loop start instead.</summary>
+    public double IntroStartSec
+    {
+        get => _slot is null || !_slot.HasIntro ? _plan.LoopStartSec
+             : DetachIntro ? IntroSourceStartSec
+             : _plan.LoopStartSec - _slot.IntroSeconds;
+        set { if (DetachIntro) IntroSourceStartSec = value; }
+    }
+
+    /// <summary>Whether the waveform should let the user grab the intro region on its own.</summary>
+    public bool IntroDraggable => SlotHasIntro && DetachIntro;
+
+    /// <summary>Caption under the waveform. It has to change once there are two grabbable regions,
+    /// otherwise nothing tells the user the intro moves too.</summary>
+    public string WaveformHint => IntroDraggable
+        ? "Drag either band to move it: amber is the intro, green is the loop. Whichever you click is the one that moves. Snaps to downbeats; hold Ctrl for free placement."
+        : "Drag to move the loop start (snaps to downbeats; hold Ctrl for free placement). Green = loop, amber = intro material, ticks = bars.";
 
     public double IntroEndSec => _slot is null || !_slot.HasIntro ? _plan.LoopStartSec
         : DetachIntro ? IntroSourceStartSec + _slot.IntroSeconds
@@ -331,7 +348,7 @@ public sealed class EditorViewModel : ObservableObject
 
     public bool CanBuild => _slot is not null && _slot.Measured && !LoopRunsPastEnd && !IntroNeedsFabrication
                             && !DetachedIntroRunsPastEnd && !string.IsNullOrWhiteSpace(_modName);
-    public bool IsBusy { get => _isBusy; private set { if (SetProperty(ref _isBusy, value)) { PreviewCommand.RaiseCanExecuteChanged(); PreviewTrackCommand.RaiseCanExecuteChanged(); BuildCommand.RaiseCanExecuteChanged(); SavePlanCommand.RaiseCanExecuteChanged(); } } }
+    public bool IsBusy { get => _isBusy; private set { if (SetProperty(ref _isBusy, value)) { PreviewCommand.RaiseCanExecuteChanged(); PreviewTrackCommand.RaiseCanExecuteChanged(); PreviewIntroCommand.RaiseCanExecuteChanged(); BuildCommand.RaiseCanExecuteChanged(); SavePlanCommand.RaiseCanExecuteChanged(); } } }
     public string BusyText { get => _busyText; private set => SetProperty(ref _busyText, value); }
     public string PreviewInfo { get => _previewInfo; private set => SetProperty(ref _previewInfo, value); }
     /// <summary>Shown after a preview when the limiter had to work hard, which is the usual reason a
@@ -403,6 +420,50 @@ public sealed class EditorViewModel : ObservableObject
             PlayPreviewFile(path);
         }
         catch (TmmException e) { _app.Dialogs.ShowError("Preview failed", e.Message); }
+        finally { IsBusy = false; BusyText = ""; }
+    }
+
+    /// <summary>
+    /// Play the intro WEM on its own. With a detached intro this is the only way to audition the
+    /// material you picked without sitting through the loop first, and it is the quickest check that
+    /// a fade-in or a hand-placed cut starts where you meant it to.
+    /// </summary>
+    private async Task PreviewIntroAsync()
+    {
+        if (_song is null || _slot is null) return;
+        if (!_slot.HasIntro) { _app.Dialogs.ShowInfo("No intro", $"'{_slot.Title}' has no intro WEM, so there is nothing to preview."); return; }
+        if (!_slot.Measured) { _app.Dialogs.ShowError("Catalog not built", Validation); return; }
+        if (LoopRunsPastEnd || IntroNeedsFabrication || DetachedIntroRunsPastEnd) { _app.Dialogs.ShowError("Cannot preview", Validation); return; }
+        _app.Preview.Stop();
+        IsBusy = true; BusyText = "Rendering intro…";
+        try
+        {
+            var plan = _plan.Clone(); var pcm = _song.Pcm; var slot = _slot; var stretcher = _app.Stretcher();
+            var cache = _app.Settings.CacheDir;
+            var (path, info, advice) = await Task.Run(() =>
+            {
+                // The whole plan is rendered because the trim and the limiter are decided against the
+                // loop; taking the intro out of a full render is what the game will actually play.
+                var b = RenderPipeline.RenderBuffers(pcm, slot, plan, stretcher);
+                var intro = b.Intro ?? throw new RenderException("this render produced no intro buffer");
+                Directory.CreateDirectory(cache);
+                var p = Path.Combine(cache, $"intro_{Guid.NewGuid():N}.wav");
+                WavIo.WritePcm16(p, intro);
+                var where = plan.IntroStrategy == IntroStrategy.Detached
+                    ? $"cut from {plan.IntroStartSec ?? 0:0.00} s"
+                    : $"{plan.IntroStrategy}";
+                var trim = Math.Abs(b.GainDb) > 1e-9 ? $" · trim {b.GainDb:+0.0;-0.0} dB" : "";
+                double peak = intro.PeakDbfs();
+                // A Silence intro is genuinely empty; saying "peak -∞ dBFS" reads like a failure.
+                var level = double.IsNegativeInfinity(peak) ? "silent" : $"peak {peak:0.0} dBFS";
+                return (p, $"intro only · {intro.Seconds:0.00} s · {where} · {level}{trim}",
+                        AdviceFor(b.GainDb, b.LimiterReductionDb));
+            });
+            PreviewInfo = info;
+            PreviewAdvice = advice;
+            PlayPreviewFile(path);
+        }
+        catch (TmmException e) { _app.Dialogs.ShowError("Intro preview failed", e.Message); }
         finally { IsBusy = false; BusyText = ""; }
     }
 

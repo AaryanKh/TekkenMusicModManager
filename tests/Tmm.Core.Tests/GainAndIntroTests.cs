@@ -136,6 +136,36 @@ public class GainAndIntroTests
     }
 
     [Fact]
+    public void DraggingADetachedIntroChangesOnlyTheIntro()
+    {
+        // What the waveform does when the user grabs the amber band: move IntroStartSec and nothing
+        // else. The loop must come back byte-identical, or dragging the intro would silently
+        // re-render the loop too.
+        var pcm = new PcmBuffer(20 * Rate, 2, Rate);
+        for (int i = 0; i < pcm.Frames; i++)
+        {
+            float v = (float)(0.3 * Math.Sin(2 * Math.PI * (200 + i / (double)Rate * 20) * i / Rate));
+            pcm[i, 0] = v; pcm[i, 1] = v;
+        }
+        var slot = SlotWithIntro(loopSec: 4, introSec: 2);
+        var plan = new RenderPlan
+        {
+            SlotKey = 1, LoopStartSec = 12, LoopBars = 1, Rho = 1.0,
+            IntroStrategy = IntroStrategy.Detached, IntroStartSec = 0,
+        };
+        var before = RenderPipeline.RenderBuffers(pcm, slot, plan, new ResampleStretcher());
+
+        plan.IntroStartSec = 6;                       // the drag
+        var after = RenderPipeline.RenderBuffers(pcm, slot, plan, new ResampleStretcher());
+
+        Assert.Equal(before.Loop.Data, after.Loop.Data);
+        Assert.NotEqual(before.Intro!.Data, after.Intro!.Data);
+        Assert.Equal(slot.IntroFrames, after.Intro.Frames);
+        // And it really is the material at 6 s.
+        Assert.Equal(pcm.Slice(6 * Rate, slot.IntroFrames).Data, after.Intro.Data);
+    }
+
+    [Fact]
     public void DetachedIntroRunningPastTheEndIsRejected()
     {
         var pcm = Tone(10);

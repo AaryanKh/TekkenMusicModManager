@@ -21,7 +21,10 @@ public sealed class WaveformControl : FrameworkElement
     public static readonly DependencyProperty LoopEndSecProperty = DependencyProperty.Register(
         nameof(LoopEndSec), typeof(double), typeof(WaveformControl), new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.AffectsRender));
     public static readonly DependencyProperty IntroStartSecProperty = DependencyProperty.Register(
-        nameof(IntroStartSec), typeof(double), typeof(WaveformControl), new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.AffectsRender));
+        nameof(IntroStartSec), typeof(double), typeof(WaveformControl),
+        new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.AffectsRender | FrameworkPropertyMetadataOptions.BindsTwoWayByDefault));
+    public static readonly DependencyProperty IntroDraggableProperty = DependencyProperty.Register(
+        nameof(IntroDraggable), typeof(bool), typeof(WaveformControl), new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
     public static readonly DependencyProperty IntroEndSecProperty = DependencyProperty.Register(
         nameof(IntroEndSec), typeof(double), typeof(WaveformControl), new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.AffectsRender));
     public static readonly DependencyProperty ShowIntroProperty = DependencyProperty.Register(
@@ -38,6 +41,10 @@ public sealed class WaveformControl : FrameworkElement
     /// somewhere else entirely, so the region is drawn from its own start and end.</summary>
     public double IntroEndSec { get => (double)GetValue(IntroEndSecProperty); set => SetValue(IntroEndSecProperty, value); }
     public bool ShowIntro { get => (bool)GetValue(ShowIntroProperty); set => SetValue(ShowIntroProperty, value); }
+    /// <summary>True when the intro sits somewhere of its own choosing (a detached intro) and so can be
+    /// dragged independently. While false the intro is derived from the loop start and every drag moves
+    /// the loop, which is the older single-region behaviour.</summary>
+    public bool IntroDraggable { get => (bool)GetValue(IntroDraggableProperty); set => SetValue(IntroDraggableProperty, value); }
     public double[]? Downbeats { get => (double[]?)GetValue(DownbeatsProperty); set => SetValue(DownbeatsProperty, value); }
 
     private static readonly Brush BgBrush = Freeze(new SolidColorBrush(Color.FromRgb(0x11, 0x13, 0x18)));
@@ -52,9 +59,15 @@ public sealed class WaveformControl : FrameworkElement
     private static readonly Pen WavePen = Freeze(new Pen(WaveBrush, 1));
     private static readonly Pen DimWavePen = Freeze(new Pen(DimWaveBrush, 1));
 
+    private static readonly Brush LabelBrush = Freeze(new SolidColorBrush(Color.FromArgb(0xC0, 0xFF, 0xFF, 0xFF)));
+
     private static T Freeze<T>(T f) where T : Freezable { f.Freeze(); return f; }
 
-    private bool _dragging;
+    /// <summary>Which region a drag is moving. Chosen on mouse-down and held for the whole gesture, so
+    /// the grab does not jump to the other region as the cursor passes over it.</summary>
+    private enum DragTarget { None, Loop, Intro }
+
+    private DragTarget _drag = DragTarget.None;
 
     public WaveformControl()
     {
@@ -114,28 +127,71 @@ public sealed class WaveformControl : FrameworkElement
         }
         dc.DrawLine(StartPen, new Point(xs, 0), new Point(xs, h));
         dc.DrawLine(EndPen, new Point(xe, 0), new Point(xe, h));
+
+        // With two independently draggable regions the user has to be able to tell which is which.
+        if (IntroDraggable && ShowIntro && xie > xi)
+        {
+            Label(dc, xi, xie, "INTRO");
+            Label(dc, xs, xe, "LOOP");
+        }
+    }
+
+    private static void Label(DrawingContext dc, double a, double b, string text)
+    {
+        var ft = new FormattedText(text, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+            new Typeface("Segoe UI"), 10, LabelBrush, 96);
+        if (b - a < ft.Width + 8) return;   // no room; the coloured band already says what it is
+        dc.DrawText(ft, new Point(a + 4, 3));
+    }
+
+    /// <summary>
+    /// Which region the user grabbed. Inside a region wins; otherwise the nearer of the two. Only ever
+    /// returns Intro when the intro is detached, because an attached intro has no position of its own.
+    /// </summary>
+    private DragTarget HitTest(double x)
+    {
+        if (!IntroDraggable || !ShowIntro) return DragTarget.Loop;
+
+        double xs = XOf(LoopStartSec), xe = XOf(LoopEndSec);
+        double xi = XOf(IntroStartSec), xie = XOf(IntroEndSec);
+        bool inLoop = x >= xs && x <= xe;
+        bool inIntro = xie > xi && x >= xi && x <= xie;
+
+        if (inIntro && !inLoop) return DragTarget.Intro;
+        if (inLoop && !inIntro) return DragTarget.Loop;
+        // Overlapping or outside both: go by distance to each region.
+        return DistanceTo(x, xi, xie) < DistanceTo(x, xs, xe) ? DragTarget.Intro : DragTarget.Loop;
+    }
+
+    private static double DistanceTo(double x, double a, double b)
+    {
+        if (b < a) (a, b) = (b, a);
+        if (x < a) return a - x;
+        if (x > b) return x - b;
+        return 0;
     }
 
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
     {
         base.OnMouseLeftButtonDown(e);
-        _dragging = true;
+        double x = e.GetPosition(this).X;
+        _drag = HitTest(x);
         CaptureMouse();
-        Move(e.GetPosition(this).X);
+        Move(x);
         e.Handled = true;
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
-        if (_dragging) Move(e.GetPosition(this).X);
+        if (_drag != DragTarget.None) Move(e.GetPosition(this).X);
     }
 
     protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
     {
         base.OnMouseLeftButtonUp(e);
-        if (!_dragging) return;
-        _dragging = false;
+        if (_drag == DragTarget.None) return;
+        _drag = DragTarget.None;
         ReleaseMouseCapture();
         e.Handled = true;
     }
@@ -150,6 +206,6 @@ public sealed class WaveformControl : FrameworkElement
             foreach (var b in beats) if (Math.Abs(b - sec) < Math.Abs(best - sec)) best = b;
             sec = best;
         }
-        SetCurrentValue(LoopStartSecProperty, sec);
+        SetCurrentValue(_drag == DragTarget.Intro ? IntroStartSecProperty : LoopStartSecProperty, sec);
     }
 }

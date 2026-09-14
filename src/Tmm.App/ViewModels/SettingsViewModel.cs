@@ -9,7 +9,7 @@ using Tmm.Core.Steam;
 namespace Tmm.App.ViewModels;
 
 /// <summary>Game root (auto-detect via Steam libraryfolders.vdf, else browse), packer choice and
-/// path, ffmpeg path, stretch cap default, 'Build catalog' with progress.</summary>
+/// path, ffmpeg path, stretch cap default, and an optional catalog rebuild with progress.</summary>
 public sealed class SettingsViewModel : ObservableObject
 {
     public static readonly string[] Packers = { "unrealpak", "repak" };

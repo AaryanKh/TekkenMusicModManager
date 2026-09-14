@@ -180,7 +180,7 @@ public sealed class DashboardViewModel : ObservableObject
     private void RebuildOne(ModManifest m)
     {
         var slot = _app.Catalog.Get(m.SlotKey)
-                   ?? throw new CatalogNotBuiltException($"slot {m.SlotKey} ({m.SlotTitle}) is not in the catalog. Build the catalog in Settings first.");
+                   ?? throw new CatalogNotBuiltException($"slot {m.SlotKey} ({m.SlotTitle}) is not in the catalog. Season 2 and collaboration tracks are not in the shipped catalog because they live outside pakchunk0 — export those paks and rebuild the catalog in Settings to add them.");
         _app.Builder().Rebuild(m, slot, _app.Settings.FfmpegExe, _progress);
     }
 

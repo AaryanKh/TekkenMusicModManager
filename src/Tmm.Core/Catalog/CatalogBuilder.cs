@@ -8,7 +8,9 @@ public sealed record CatalogBuildResult(int Measured, IReadOnlyList<SlotIdentity
     public int Total => Measured + Skipped.Count;
 }
 
-/// <summary>Orchestrates first-run catalog build: sheet -> extract -> measure -> store.</summary>
+/// <summary>Orchestrates a catalog build: sheet -> extract -> measure -> store. Optional for users,
+/// since a measured catalog ships with the app; this is for re-measuring after a game patch and for
+/// adding slots whose WEMs are outside pakchunk0.</summary>
 public static class CatalogBuilder
 {
     public static CatalogBuildResult Build(string sheetCsv, IExtractor extractor, string scratch, CatalogStore store,

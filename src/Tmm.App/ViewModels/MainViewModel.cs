@@ -12,7 +12,7 @@ public enum CreateStep { Import, Ranking, Editor }
 /// Shell: a sidebar with the top-level modes and a content area.
 ///   Create      import -&gt; ranking -&gt; editor/preview -&gt; build   (a wizard, left to right)
 ///   Dashboard   installed mods, enable/disable, rebuild, conflicts
-///   Settings    game path, packer, stretch cap, catalog build
+///   Settings    game path, packer, stretch cap, optional catalog rebuild
 /// </summary>
 public sealed class MainViewModel : ObservableObject
 {
@@ -134,7 +134,7 @@ public sealed class MainViewModel : ObservableObject
     private async Task OpenExistingAsync(ModManifest m)
     {
         var slot = _app.Catalog.Get(m.SlotKey);
-        if (slot is null) { _app.Dialogs.ShowError("Catalog", $"Slot {m.SlotKey} ({m.SlotTitle}) is not in the catalog. Build the catalog in Settings first."); return; }
+        if (slot is null) { _app.Dialogs.ShowError("Catalog", $"Slot {m.SlotKey} ({m.SlotTitle}) is not in the catalog. Season 2 and collaboration tracks are not in the shipped catalog because they live outside pakchunk0 — export those paks and rebuild the catalog in Settings to add them."); return; }
         if (!File.Exists(m.SongPath)) { _app.Dialogs.ShowError("Song missing", $"The source song is no longer at:\n{m.SongPath}"); return; }
         IsBusy = true; Status = $"Re-analyzing {Path.GetFileName(m.SongPath)}…";
         try

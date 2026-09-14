@@ -46,13 +46,15 @@
             <!-- Catalog -->
             <Border Style="{StaticResource Card}" Margin="0,0,0,10">
                 <StackPanel>
-                    <TextBlock Text="Slot catalog" Style="{StaticResource H2}" Margin="0,0,0,4"/>
-                    <TextBlock Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,8"
-                               Text="Exact slot lengths are measured from the game's own stock WEM headers, never transcribed from the spreadsheet. Extract Polaris/Content/WwiseAudio/Media from pakchunk0-Windows.pak with FModel once, point this at the folder, and build. ~886 files, a few seconds."/>
+                    <TextBlock Text="Slot catalog  —  optional" Style="{StaticResource H2}" Margin="0,0,0,4"/>
+                    <TextBlock Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,8" TextWrapping="Wrap"
+                               Text="You do not need to do anything here. A measured catalog ships with the app, so mods build straight away and FModel is not required. There are only two reasons to rebuild: a game patch changed a track's length, or you want the Season 2 and collab slots, which are not in pakchunk0 and so are missing from the shipped catalog."/>
+                    <TextBlock Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,8" TextWrapping="Wrap"
+                               Text="To rebuild: export Polaris/Content/WwiseAudio/Media from the game's paks with FModel, point this at the folder, and build. Lengths are always measured from the stock WEM headers, never transcribed from the spreadsheet. Slots whose WEMs are missing from your export are skipped and listed, not treated as errors."/>
                     <TextBlock Text="Folder with extracted stock .wem files" Style="{StaticResource Label}"/>
                     <DockPanel Style="{StaticResource PathRow}">
                         <Button DockPanel.Dock="Right" Content="Browse…" Command="{Binding BrowseWemFolderCommand}" Margin="6,0,0,0"/>
-                        <Button DockPanel.Dock="Right" Content="Build catalog" Style="{StaticResource AccentButton}" Command="{Binding BuildCatalogCommand}" Margin="6,0,0,0"/>
+                        <Button DockPanel.Dock="Right" Content="Rebuild catalog" Command="{Binding BuildCatalogCommand}" Margin="6,0,0,0"/>
                         <TextBox Text="{Binding WemSourceFolder, UpdateSourceTrigger=PropertyChanged}"/>
                     </DockPanel>
                     <ProgressBar Value="{Binding Progress, Mode=OneWay}" Maximum="100" Margin="0,0,0,6" Visibility="{Binding IsBuilding, Converter={StaticResource Vis}}"/>

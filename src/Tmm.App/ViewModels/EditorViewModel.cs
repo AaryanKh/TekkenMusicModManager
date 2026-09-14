@@ -4,6 +4,7 @@ using Tmm.Core;
 using Tmm.Core.Analysis;
 using Tmm.Core.Audio;
 using Tmm.Core.LoopFit;
+using Tmm.Core.Mods;
 using Tmm.Core.Render;
 
 namespace Tmm.App.ViewModels;
@@ -51,6 +52,7 @@ public sealed class EditorViewModel : ObservableObject
         PreviewCommand = new AsyncRelayCommand(PreviewAsync, () => HasSong && !IsBusy);
         PreviewTrackCommand = new AsyncRelayCommand(PreviewTrackAsync, () => HasSong && !IsBusy);
         IntroToSongStartCommand = new RelayCommand(() => IntroSourceStartSec = 0, () => DetachIntro);
+        RecommendNameCommand = new RelayCommand(RecommendName, () => HasSong && !IsExisting);
         StopCommand = new RelayCommand(() => _app.Preview.Stop());
         SeekCommand = new RelayCommand(p => { if (p is double sec) _app.Preview.Seek(sec); });
         SkipToSeamCommand = new RelayCommand(() => { if (FirstSeamSec is double t) _app.Preview.Seek(Math.Max(0, t - SeamLeadInSec)); },
@@ -78,6 +80,7 @@ public sealed class EditorViewModel : ObservableObject
     public AsyncRelayCommand PreviewCommand { get; }
     public AsyncRelayCommand PreviewTrackCommand { get; }
     public RelayCommand IntroToSongStartCommand { get; }
+    public RelayCommand RecommendNameCommand { get; }
     public RelayCommand StopCommand { get; }
     public RelayCommand SeekCommand { get; }
     public RelayCommand SkipToSeamCommand { get; }
@@ -135,7 +138,7 @@ public sealed class EditorViewModel : ObservableObject
         BarsUpCommand.RaiseCanExecuteChanged(); BarsDownCommand.RaiseCanExecuteChanged(); SnapCommand.RaiseCanExecuteChanged();
         ResetCommand.RaiseCanExecuteChanged(); PreviewCommand.RaiseCanExecuteChanged(); BuildCommand.RaiseCanExecuteChanged();
         SavePlanCommand.RaiseCanExecuteChanged(); PreviewTrackCommand.RaiseCanExecuteChanged(); PreviewIntroCommand.RaiseCanExecuteChanged();
-        IntroToSongStartCommand.RaiseCanExecuteChanged();
+        IntroToSongStartCommand.RaiseCanExecuteChanged(); RecommendNameCommand.RaiseCanExecuteChanged();
     }
 
     // ------------------------------------------------------------------ read-only context
@@ -642,6 +645,13 @@ public sealed class EditorViewModel : ObservableObject
     }
 
     // ------------------------------------------------------------------ helpers
+
+    /// <summary>Fill the name box with "[T7]_Game_Track", skipping any name already in use.</summary>
+    private void RecommendName()
+    {
+        if (_slot is null || _song is null) return;
+        ModName = NameSuggester.Suggest(_slot, _song.Song.Path, _app.Registry.All().Select(m => m.Name));
+    }
 
     private static string SuggestName(string title)
     {

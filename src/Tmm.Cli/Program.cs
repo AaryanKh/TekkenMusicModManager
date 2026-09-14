@@ -62,7 +62,7 @@ static class Cli
         "tmm catalog build --sheet <csv> --wems <folder> [--strict]\n" +
         "tmm catalog status\n" +
         "tmm analyze <song> [--top N] [--cap 0.06]\n" +
-        "tmm build <song> --slot <loop_id> --name <name> [--bars N] [--start S] [--gain dB] [--intro-start S] [--no-pack]\n" +
+        "tmm build <song> --slot <loop_id> [--name <name>] [--bars N] [--start S] [--gain dB] [--intro-start S] [--no-pack]\n" +
         "tmm mods list | scan [--adopt] | enable <id> | disable <id> | rebuild <id> | delete <id>\n" +
         "tmm wem dump <file.wem>\n" +
         "tmm find-game\n" +
@@ -150,7 +150,7 @@ static class Cli
     static int Build(List<string> args, Settings s)
     {
         int slotKey = int.Parse(Take(args, "--slot") ?? throw new TmmException("--slot <loop_id> is required"));
-        string name = Take(args, "--name") ?? throw new TmmException("--name is required");
+        string? name = Take(args, "--name");   // optional: suggested from the slot and filename below
         int? bars = Take(args, "--bars") is string b ? int.Parse(b) : null;
         double? start = Take(args, "--start") is string st ? double.Parse(st, CultureInfo.InvariantCulture) : null;
         bool noPack = Flag(args, "--no-pack");
@@ -200,6 +200,12 @@ static class Cli
             plan.IntroStartSec = isec;
             plan.ManualOverrides["intro_start"] = isec.ToString("0.###", CultureInfo.InvariantCulture);
             Console.WriteLine($"detached intro: cut from {isec:0.00}s, independent of the loop start");
+        }
+
+        if (name is null)
+        {
+            name = NameSuggester.Suggest(slot, songPath, new ModRegistry(s).All().Select(m => m.Name));
+            Console.WriteLine($"name: {name} (suggested; pass --name to choose your own)");
         }
 
         var stretcher = StretcherFactory.FromSettings(s);

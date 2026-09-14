@@ -190,8 +190,13 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel>
                         <TextBlock Text="Mod name" Style="{StaticResource Label}"/>
-                        <TextBox Text="{Binding ModName, UpdateSourceTrigger=PropertyChanged}" MaxWidth="420" HorizontalAlignment="Left" Width="420"
-                                 IsEnabled="{Binding IsExisting, Converter={StaticResource InverseBool}}"/>
+                        <DockPanel HorizontalAlignment="Left" Width="540">
+                            <Button DockPanel.Dock="Right" Content="Recommend a name" Style="{StaticResource SmallButton}"
+                                    Command="{Binding RecommendNameCommand}" Margin="8,0,0,0"
+                                    ToolTip="Fills in [Tekken game]_[where the music is from]_[track], from the slot and the song filename."/>
+                            <TextBox Text="{Binding ModName, UpdateSourceTrigger=PropertyChanged}"
+                                     IsEnabled="{Binding IsExisting, Converter={StaticResource InverseBool}}"/>
+                        </DockPanel>
                         <TextBlock Style="{StaticResource Muted}" FontSize="11" Margin="0,4,0,0"
                                    Text="Becomes &lt;name&gt;_P.pak. Building renders both WEMs sample-exact, packs them, and stores the mod; enabling is a separate step on the dashboard so conflicts are checked in one place."/>
                     </StackPanel>

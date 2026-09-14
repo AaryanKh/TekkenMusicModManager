@@ -26,7 +26,7 @@ public static class WavIo
     {
         int block = channels * bits / 8;
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
-        using var fs = File.Create(path);
+        using var fs = FileOps.Create(path);
         Span<byte> h = stackalloc byte[44];
         "RIFF"u8.CopyTo(h);
         BinaryPrimitives.WriteUInt32LittleEndian(h[4..], (uint)(36 + data.Length + (data.Length & 1)));

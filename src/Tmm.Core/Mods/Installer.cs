@@ -24,14 +24,13 @@ public static class Installer
         }
 
         Directory.CreateDirectory(modsDir);   // "~mods", never "Mods" — Spike B Test 8
-        File.Copy(store, Path.Combine(modsDir, m.PakName), overwrite: true);
+        FileOps.Copy(store, Path.Combine(modsDir, m.PakName));
     }
 
     public static void Disable(ModManifest m, ModRegistry reg)
     {
         var installed = reg.InstalledPak(m);
-        if (installed is not null && File.Exists(installed))
-            File.Delete(installed);
+        if (installed is not null) FileOps.DeleteFile(installed);
     }
 
     /// <summary>Disable, then remove from the app store. The only destructive operation.</summary>
@@ -39,6 +38,6 @@ public static class Installer
     {
         Disable(m, reg);
         var dir = reg.ModDir(m);
-        if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        FileOps.DeleteDirectory(dir);
     }
 }

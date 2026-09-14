@@ -215,6 +215,7 @@ public sealed class DashboardViewModel : ObservableObject
         IsBusy = true; BusyText = what;
         try { await Task.Run(work); }
         catch (TmmException e) { _app.Dialogs.ShowError("Operation failed", e.Message); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { _app.Dialogs.ShowError("Operation failed", FileOps.Explain(e)); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { _app.Dialogs.ShowError("File error", e.Message); }
         finally
         {

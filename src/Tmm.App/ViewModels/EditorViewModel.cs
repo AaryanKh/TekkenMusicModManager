@@ -630,6 +630,7 @@ public sealed class EditorViewModel : ObservableObject
             Built?.Invoke(this, m);
         }
         catch (TmmException e) { _app.Dialogs.ShowError("Build failed", e.Message); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { _app.Dialogs.ShowError("Build failed", FileOps.Explain(e)); }
         finally { IsBusy = false; BusyText = ""; }
     }
 

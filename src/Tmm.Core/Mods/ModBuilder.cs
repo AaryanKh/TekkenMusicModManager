@@ -59,7 +59,7 @@ public sealed class ModBuilder
     {
         progress?.Report((1, 4, "Rendering"));
         var wemDir = _reg.WemDir(m);
-        if (Directory.Exists(wemDir)) Directory.Delete(wemDir, recursive: true);
+        FileOps.DeleteDirectory(wemDir);
         var result = RenderPipeline.Render(pcm, slot, m.Plan, wemDir, _stretcher);
 
         progress?.Report((2, 4, "Staging"));

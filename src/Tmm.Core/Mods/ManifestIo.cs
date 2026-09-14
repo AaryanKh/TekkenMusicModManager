@@ -19,7 +19,7 @@ public static class ManifestIo
     {
         Directory.CreateDirectory(modDir);
         var path = Path.Combine(modDir, FileName);
-        File.WriteAllText(path, JsonSerializer.Serialize(m, Options));
+        FileOps.WriteAllText(path, JsonSerializer.Serialize(m, Options));
         return path;
     }
 

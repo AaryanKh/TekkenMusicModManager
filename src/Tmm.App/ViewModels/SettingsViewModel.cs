@@ -226,6 +226,7 @@ public sealed class SettingsViewModel : ObservableObject
             }
         }
         catch (TmmException e) { BuildStatus = "Failed."; _app.Dialogs.ShowError("Catalog build failed", e.Message); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { BuildStatus = "Failed."; _app.Dialogs.ShowError("Catalog build failed", FileOps.Explain(e)); }
         finally { IsBuilding = false; RefreshStatus(); }
     }
 }

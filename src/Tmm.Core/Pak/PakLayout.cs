@@ -10,11 +10,11 @@ public static class PakLayout
     public static string Stage(string modName, IReadOnlyDictionary<int, string> wems, string scratch)
     {
         var root = Path.Combine(scratch, modName + Constants.PakSuffix);
-        if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        FileOps.DeleteDirectory(root);
         var media = Path.Combine(root, Constants.WemMediaRelative);
         Directory.CreateDirectory(media);
         foreach (var (wid, src) in wems)
-            File.Copy(src, Path.Combine(media, $"{wid}.wem"), overwrite: true);
+            FileOps.Copy(src, Path.Combine(media, $"{wid}.wem"));
         return root;
     }
 

@@ -75,7 +75,7 @@ public static class WemWriter
         WriteChunk(body, "data", data);
 
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outPath))!);
-        using var fs = File.Create(outPath);
+        using var fs = FileOps.Create(outPath);
         fs.Write("RIFF"u8);
         Span<byte> riffLen = stackalloc byte[4];
         BinaryPrimitives.WriteUInt32LittleEndian(riffLen, (uint)(4 + body.Length));

@@ -130,6 +130,6 @@ public static class SettingsStore
     public static void Save(Settings s)
     {
         Directory.CreateDirectory(s.AppDir);
-        File.WriteAllText(s.SettingsPath, JsonSerializer.Serialize(s, Options));
+        FileOps.WriteAllText(s.SettingsPath, JsonSerializer.Serialize(s, Options));
     }
 }

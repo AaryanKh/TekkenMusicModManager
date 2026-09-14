@@ -37,10 +37,11 @@ public sealed class UnrealPakPacker : IPacker
         foreach (var f in files)
             sb.Append('"').Append(Path.GetFullPath(f)).Append("\" \"../../../")
               .Append(Constants.WemMediaPakPath).Append('/').Append(Path.GetFileName(f)).Append("\"\r\n");
+        FileOps.PrepareWrite(listPath);
         File.WriteAllText(listPath, sb.ToString(), new UTF8Encoding(false));
 
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outPak))!);
-        if (File.Exists(outPak)) File.Delete(outPak);
+        FileOps.DeleteFile(outPak);
         var (code, output) = Run(_exe, new[] { Path.GetFullPath(outPak), $"-create={listPath}" });
         if (code != 0 || !File.Exists(outPak))
             throw new PackException($"UnrealPak failed (exit {code}):\n{Tail(output)}");

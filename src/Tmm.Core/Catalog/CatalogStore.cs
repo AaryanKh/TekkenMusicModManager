@@ -97,6 +97,6 @@ public sealed class CatalogStore
     private void Save()
     {
         Directory.CreateDirectory(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(_path))!);
-        File.WriteAllText(_path, JsonSerializer.Serialize(_doc, Options));
+        FileOps.WriteAllText(_path, JsonSerializer.Serialize(_doc, Options));
     }
 }

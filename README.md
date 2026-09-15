@@ -1,325 +1,221 @@
-# Tekken Music Mod Manager (.NET)
+# Tekken Music Mod Manager
 
-Drag a song in, get a Tekken 8 jukebox mod out. A Windows desktop app (WPF, .NET 8) plus the engine
-behind it, ported from the Python scaffold described in `ARCHITECTURE.md` of the original repo.
+Drag a song in, get a TEKKEN 8 jukebox mod out.
 
-```
-TekkenMusicModManager.sln
-├── src/Tmm.Core        engine: WEM I/O, catalog, analysis, loop fitting, render, pak, mods (no UI, no NuGet)
-├── src/Tmm.App         WPF GUI (net8.0-windows): Create wizard, Dashboard, Settings
-├── src/Tmm.Cli         `tmm` command line — the full pipeline without the GUI
-├── tests/Tmm.Core.Tests  xunit: WEM round-trip, scoring, registry state, analyzer on synthetic audio
-├── data/jukebox_slots.csv  the community sheet, normalized (IDs + titles + whole-second lengths)
-└── data/stock_catalog.json the measured slot catalog that ships with the app (432 slots)
-```
+Pick any track you own, choose which jukebox slot it should replace, trim the loop until it sounds
+right, and the app builds the mod and installs it for you. A Windows desktop app for Windows 10 and 11.
+
+---
 
 ## Install
 
-Grab the portable zip from [Releases](https://github.com/AaryanKh/TekkenMusicModManager/releases) and
-unzip it somewhere you can write to — your Desktop or Documents, **not** inside `Program Files`. Run
-`TekkenMusicModManager.exe`. There is no installer to run and no .NET to install; the runtime is inside
-the exe, which is why the first launch takes a second or two longer than later ones.
+1. Download the zip from [Releases](https://github.com/AaryanKh/TekkenMusicModManager/releases).
+2. Unzip it somewhere you can write to — your Desktop or Documents, **not** inside `Program Files`.
+3. Run `TekkenMusicModManager.exe`.
 
-Windows SmartScreen will say "Windows protected your PC" because the exe is not code-signed. Click
-**More info → Run anyway**.
+There is nothing to install and no .NET to set up; it is all inside the exe. The first launch takes a
+second or two longer than later ones.
 
-Everything the app saves stays in `UserData\` next to the exe, so moving or backing up that one folder
-takes your settings and every mod with it.
+Windows will say **"Windows protected your PC"** the first time, because the app is not code-signed.
+Click **More info → Run anyway**.
 
-### Two tools you have to supply
+Everything the app saves lives in `UserData\` next to the exe, so copying that one folder takes your
+settings and every mod you have built with it.
 
-Neither is bundled, for licensing reasons. The zip ships empty `tools\ffmpeg\` and `tools\UnrealPak\`
-folders to drop them into, and pointing Settings at them is a one-time step.
+### Two tools you need to supply
 
-**ffmpeg** — decodes whatever you feed the app (MP3, FLAC, WAV, M4A, OGG). Easiest route is
-**Settings → External tools → Install with winget**, which does it for you. Otherwise run
-`winget install Gyan.FFmpeg` yourself, or download a build from
-[gyan.dev](https://www.gyan.dev/ffmpeg/builds/), put `ffmpeg.exe` in `tools\ffmpeg\`, and Browse to it
-in Settings.
+These cannot be bundled for licensing reasons. The zip includes empty `tools\ffmpeg\` and
+`tools\UnrealPak\` folders to drop them into. Pointing Settings at them is a one-time job.
 
-**UnrealPak.exe** — packs the finished mod into the `<name>_P.pak` the game loads. This is the community
-build that comes with the usual Tekken 8 modding tutorials, normally a small bundle of `UnrealPak.exe`
-plus its DLLs and a few `.bat` files. It is not on winget and there is no official download, so use the
-one from whichever tutorial you followed. Put the whole bundle in `tools\UnrealPak\` and Browse to
-`UnrealPak.exe` in Settings. Keep the DLLs next to it; it will not run without them.
+**ffmpeg** — reads your music files (MP3, FLAC, WAV, M4A, OGG).
 
-### Everything else is automatic
+Easiest route is **Settings → External tools → Install with winget**, which fetches it for you.
+Otherwise run `winget install Gyan.FFmpeg` yourself, or download a build from
+[gyan.dev](https://www.gyan.dev/ffmpeg/builds/), put `ffmpeg.exe` into `tools\ffmpeg\`, and browse to
+it in Settings.
+
+**UnrealPak.exe** — packs the finished mod into the file the game loads.
+
+This is the community build that comes with the usual TEKKEN 8 modding tutorials: a small bundle of
+`UnrealPak.exe` plus some DLLs and `.bat` files. There is no official download, so use the one from
+whichever tutorial you followed. Put the whole bundle into `tools\UnrealPak\` and browse to
+`UnrealPak.exe` in Settings. Keep the DLLs beside it — it will not run without them.
+
+### Everything else is handled
 
 | | |
 |---|---|
-| **Tekken 8 folder** | Auto-detected through Steam's `libraryfolders.vdf`. Settings → **Auto-detect (Steam)** if it guessed wrong. |
-| **Slot catalog** | Ships with the app — 432 measured slots. Nothing to extract, **no FModel**. See [The shipped catalog](#the-shipped-catalog). |
+| **TEKKEN 8 folder** | Found automatically through Steam. Settings → **Auto-detect (Steam)** if it guesses wrong. |
+| **Slot list** | All the jukebox slots ship with the app. Nothing to extract, and **FModel is not required**. |
 | **.NET** | Built into the exe. |
-| **Wwise** | Not used at all (Spike B). |
 
-Optional: set a `rubberband.exe` path in Settings for pitch-preserving time-stretch. Without it the
-built-in resampler stretches and shifts pitch by the same ratio, up to about a semitone at the 6 % cap.
+Optional: if you have `rubberband.exe`, point Settings at it for pitch-preserving stretching. Without
+it, tracks that need stretching also shift pitch slightly — at most about a semitone.
 
-### Check it took
+### Check you are ready
 
-The Dashboard shows one status line. When it reads **Ready.** you can build a mod. Until then it names
-what is still missing:
+The Dashboard shows a single status line. When it reads **Ready.** you can build a mod. Until then it
+tells you what is missing:
 
 ```
 Not set up yet: ffmpeg, UnrealPak.exe — see Settings.
 ```
 
-From a terminal, `tmm.exe find-game` and `tmm.exe catalog status` answer the same questions.
+---
 
-### Installer instead of the zip
+## Making a mod
 
-`installer\build-wix.ps1` and `installer\build-installer.ps1` produce a setup exe if you would rather
-install than unzip. The Inno wizard adds pages the zip has no equivalent for: detected ffmpeg and
-UnrealPak paths with Browse, an offer to install ffmpeg with winget, and the Tekken 8 folder. It writes
-`install-hints.json`, which the app folds into its settings on first start. See
-[Distribution builds](#distribution-builds).
+1. **Drop a song** anywhere in the window. It is analysed for tempo and structure, and every loop it
+   could naturally produce is worked out.
+2. **Pick a slot.** All 443 jukebox tracks are ranked by how well your song fits. The percentage
+   combines how much stretching is needed, how clean the loop point is, whether there is real material
+   for the intro, and how much of your song gets used.
+3. **Edit and preview.** Drag the loop start on the waveform, change its length in bars, choose how the
+   intro is made, and set the volume. **Preview loop ×3** plays the loop back to back so you can hear
+   the join. **Preview full track** plays it exactly as the game will: intro once, then the loop
+   repeating. **Skip to the seam** jumps straight to the join instead of waiting for it.
+4. **Build.** Both audio files are rendered to the exact length the game expects, packed, and saved.
+5. **Enable** from the Dashboard. That copies the mod into the game's `~mods` folder. Disable removes
+   it again and keeps the mod here, so you can switch it back on any time.
 
-## Build from source
+If two enabled mods would replace the same music, you are told before anything is installed. Mods other
+people made that are already in `~mods` are checked too.
 
-Requires the .NET 8 SDK (`winget install Microsoft.DotNet.SDK.8`). Visual Studio 2022 17.8+ or Rider both
-open the solution; from a terminal:
+---
+
+## The Dashboard
+
+Every mod you have built, with its state: **Enabled**, **Disabled**, **Needs rebuild** (you changed
+something since it was last built), or **Broken**.
+
+Per mod you can Enable, Disable, Rebuild, Edit, or Delete. Deleting removes the mod entirely; disabling
+only takes it out of the game.
+
+### Tile view
+
+The button at the bottom right switches between the table and a grid of tiles, and your choice is
+remembered. Each tile shows the song's album art, with a green dot when the mod is enabled and a grey
+one when it is not. Hovering or selecting a tile lifts the art and slides the TEKKEN game's cover out
+from behind it. Click a tile for its details and actions; click anywhere else, or press Escape, to
+deselect.
+
+**Album art** comes from the song file itself when it has any. When it does not, you get a placeholder,
+and two extra buttons appear:
+
+- **Find art online** looks the album up from the song's tags. If the file has no useful tags it falls
+  back to the mod's own name and progressively looser searches, so untagged files usually still find
+  something. You choose from the results; nothing is applied on its own.
+- **Remove art** goes back to the placeholder.
+
+**TEKKEN covers**, the artwork behind each tile, start as simple drawn cards. **Settings → Tekken
+covers** can look up a real cover for each game. The games themselves are not in any music catalogue,
+but their official soundtrack albums are, and that cover is the same square artwork the in-game jukebox
+uses. Again, you choose from the results.
+
+Nothing is downloaded until you ask for it, and no artwork is bundled with the app.
+
+---
+
+## Getting a good-sounding loop
+
+**Loop length in bars** is the main control. Fewer or more bars changes how much your song has to be
+stretched to fit the slot exactly. Under about 3 % nobody notices; past 6 % it starts to sound wrong,
+and the app warns you.
+
+**The seam** is where the loop wraps back to its start. The seam score compares your loop point against
+every other possible cut in the same song, so 97 % means only 3 % of cuts would sound better. The
+crossfade slider smooths the join: 20 ms hides most clicks, and over 100 ms starts to smear drums.
+
+**Intro** decides what plays once before the loop begins:
+
+| | |
+|---|---|
+| **Real** | The music immediately before your loop start. Needs the loop to begin far enough into the song. |
+| **Detached** | Intro taken from anywhere you like, independent of the loop. Use this to keep a song's real opening while looping a chorus from the middle. |
+| **Fade in** | Whatever lead-in exists, padded with silence and faded up. |
+| **Silence** | No intro; the loop starts cold. |
+
+With **Detached** ticked you can drag the intro band on the waveform separately from the loop.
+
+**Volume adjustment** turns the whole mod up or down, applied to the intro and loop together so nothing
+jumps at the handover. It cannot distort: past a point it simply stops getting louder. Use it when one
+of your mods sounds quieter than another in game — raise the quiet one. How much of it survives depends
+on the song. A quiet track takes +12 dB cleanly; one already mastered loud has no room, and the preview
+will tell you so.
+
+---
+
+## Questions you might have
+
+**Is this safe for my game?** Mods are copied into `Polaris\Content\Paks\~mods` and nothing else is
+touched. Disabling a mod deletes that one file. Removing the whole folder puts the game back exactly as
+it was.
+
+**Will it break when the game updates?** Usually not. If a patch changes the length of a track you have
+replaced, rebuild that mod. Settings can re-measure the slot list from your own game files, but you only
+need that in this situation.
+
+**Which tracks can I replace?** Almost all of them. The Season 2 and collaboration tracks are the
+exception: they live outside the game's base files and are not in the list that ships, so you would need
+to re-measure the slot list in Settings to use those slots.
+
+**Can I rename my mods?** Yes. Rename the `.pak` in `~mods` however you like, then press **Scan ~mods**
+on the Dashboard and the app will recognise it and update itself to match.
+
+**Why does my song sound slightly off-pitch?** Because it needed stretching to fit the slot, and without
+`rubberband.exe` the pitch moves with it. Either install rubberband, or pick a loop length closer to the
+slot's own.
+
+**Where are my mods kept?** In `UserData\mods\` beside the exe. Each mod keeps its settings and its
+built file there, which is why disabling never loses anything.
+
+---
+
+## Command line
+
+The zip also contains `tmm.exe`, which does everything the app does without the window. Run it with no
+arguments for the full list.
+
+```
+tmm analyze <song>                                  rank every slot for a song
+tmm build <song> --slot <id> [--name <name>]        build a mod
+tmm mods list | scan [--adopt] | enable <id> | disable <id> | rebuild <id> | delete <id>
+tmm find-game                                       locate the TEKKEN 8 install
+```
+
+---
+
+## Building it yourself
+
+Needs the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0).
 
 ```
 dotnet build TekkenMusicModManager.sln
 dotnet test  TekkenMusicModManager.sln
 dotnet run --project src/Tmm.App
-dotnet run --project src/Tmm.Cli -- --help
 ```
 
-`Tmm.Core`, `Tmm.Cli` and the tests are plain `net8.0`. Only `Tmm.App` needs Windows (WPF).
+`installer\build-portable.ps1` produces the zip from Releases. `installer\build-installer.ps1` and
+`installer\build-wix.ps1` produce setup executables instead.
 
-Building from source still needs ffmpeg and UnrealPak at runtime — see [Install](#install).
+The engine (`src/Tmm.Core`) has no dependencies outside .NET itself; only the interface needs Windows.
 
-## The shipped catalog
+---
 
-`data\stock_catalog.json` holds the measured facts for 432 jukebox slots: WEM id, exact frame count,
-sample rate and channel count, read from the stock WEM headers. It is bundled into every build, so a
-fresh install can rank and render immediately with nothing extracted.
+## Known limits
 
-The renderer needs the *exact* frame count of the WEM it replaces, and the spreadsheet only carries
-whole seconds — off by up to half a second, which is why sheet-derived slots are marked provisional and
-refused. Measuring those numbers once and shipping them is what removes the FModel step for everyone
-else; the file is integers and titles, no game audio.
+- Songs with an unsteady or unclear tempo may be analysed poorly. When confidence is low the app says
+  so and points you at the manual editor.
+- Without `rubberband.exe`, stretching shifts pitch.
+- The volume control protects against distortion but will not make an already-loud song much louder.
+- Season 2 and collaboration slots need the slot list re-measured from your own game files.
 
-`CatalogStore` prefers a catalog the user built themselves and falls back to the shipped one, so
-Settings → Build catalog still overrides it — the reason to do that is a game patch that changes a
-track's length. The 11 Season 2 and collab slots absent from `pakchunk0` are not in the shipped file;
-export the other pakchunks and rebuild to add them.
+---
 
-## Flow
+## Thanks
 
-1. **Settings** — set the game folder (Auto-detect) and the UnrealPak path. The slot catalog is
-   already there: 432 measured slots ship with the app, so there is nothing to extract. Rebuilding it
-   from your own install is only needed after a game patch changes a track's length. A rebuild stores
-   *measured* frame counts from each stock WEM header (Vorbis fmt extension @24); slots whose WEMs are
-   absent from the export are skipped and listed rather than failing the build — Season 2 and collab
-   tracks live outside `pakchunk0`, so a pakchunk0-only export yields 432 of 443. `--strict` restores
-   hard failure.
-2. **Create → Import** — drop a song. It is decoded to 48 kHz stereo, beat-tracked, and every
-   `(downbeat, bar count)` loop it can naturally produce is generated once.
-3. **Create → Pick a slot** — all 443 slots ranked by compatibility %. The stretch-cap slider re-ranks
-   live (sorted lookup over the candidates, no re-analysis). Every row shows the four components.
-4. **Create → Edit** — waveform with intro/loop overlay. Drag the loop start (snaps to bars), change bar
-   count, intro strategy, crossfade, loudness, volume trim. **Preview loop ×3** plays the loop back to
-   back so the wrap is audible; **Preview full track** assembles the intro plus repeated loops exactly
-   as the game plays them and draws the result, which is the only way to hear the intro-to-loop
-   handover. Build renders both WEMs sample-exact, packs, and stores the mod.
-5. **Dashboard** — Enable copies the pak into `Polaris\Content\Paks\~mods` (never `Mods`), Disable
-   removes it, Rebuild replays the stored plan, Edit reopens it. Conflicts with other enabled mods and
-   with third-party paks already in `~mods` are reported before install.
+Built on the community's TEKKEN 8 audio modding work: the jukebox slot spreadsheet, and the UnrealPak
+build the tutorials pass around.
 
-State on the dashboard is derived from the filesystem every time; nothing is cached. Each mod's row
-shows the loudness of its last render and any volume trim, so two mods that sit at different levels in
-game can be compared without rebuilding either.
-
-## Tile view and album art
-
-The dashboard has a second layout, toggled at the bottom right and remembered across launches. Each
-mod is a tile showing the song's album art, with a dot that is green when enabled and grey otherwise.
-Hovering or selecting a tile lifts the art on a tilted plane and slides the Tekken game's card out from
-behind it; clicking anywhere that is not a tile, or pressing Escape, clears the selection. The selected
-tile's details and every table action sit beneath the grid.
-
-**Where the art comes from.** Song art is pulled from the file itself with ffmpeg and cached beside
-the manifest. A file with no picture shows a question mark. In the tile view's action panel:
-
-- **Find art online…** reads the song's tags with `ffmpeg -f ffmetadata` (no `ffprobe` needed), asks
-  the iTunes Search API, and shows the results next to the picture embedded in the file, if any. You
-  pick; nothing is applied on its own. This is an optional network call using .NET's built-in HTTP
-  client — it adds no installation dependency.
-
-  Untagged files are the normal case, so the search walks a ladder rather than giving up: album and
-  artist, then the album alone, then the mod's own name split back into words
-  (`[TTT]_YuGiOhDuelistsOfTheRoses_VsLancastrians` becomes "Yu Gi Oh Duelists Of The Roses Vs
-  Lancastrians"), then each part of it on its own. Results are scored against the query that found
-  them, and a query whose best hit scores poorly does not end the search — "Sonic Heroes Vs Team
-  Battle" does return records, just unrelated ones, so the ladder keeps widening until "Sonic Heroes"
-  finds the real soundtrack. If nothing ever scores well you still get the best set to choose from.
-- **Remove art** goes back to the placeholder and is remembered.
-
-**Tekken covers.** The card behind each tile is drawn at runtime from the game's name. The game's own
-jukebox artwork is Bandai Namco's, so it is neither shipped nor scraped. **Settings → Tekken covers**
-lists all eleven games and looks a real cover up on request: the games are not in any music catalogue,
-but their official soundtrack albums are, and that album cover is the same square artwork the in-game
-jukebox uses. You pick from the results, and nothing is downloaded until you do. Remove puts a game
-back to its drawn card. Chosen covers live in `covers\` under the app dir (`UserData\covers` for a
-portable install), not beside the exe, so an installed build in `Program Files` can still write them.
-
-## Levels
-
-Three separate stages decide how loud a mod ends up, in this order:
-
-| Stage | Control | What it does |
-|---|---|---|
-| Loudness match | "Match to &lt;N&gt; LUFS" | Measures integrated loudness (BS.1770-4) and moves the render toward the target. Off by default. |
-| Volume trim | `RenderPlan.GainDb`, the slider, `--gain` | Flat ±dB on top, applied to the intro and the loop equally so the handover does not step. |
-| Peak limiter | always on | Look-ahead limiter that keeps the result under −1 dBFS. |
-
-The limiter runs on every render, not only when a trim was asked for. Without it anything above full
-scale is hard-clipped by the int16 conversion, and loud masters do reach that on their own once
-resampling overshoot is added.
-
-How much of a trim survives depends entirely on the source's headroom:
-
-- A **quiet** source has room, so the trim arrives intact. A track at −25.5 LUFS peaking at −17.6 dBFS
-  takes `--gain 12` and lands at −13.5 LUFS with no limiting at all. This is the case worth using.
-- A source **already mastered near full scale** has no room, so the limiter takes the gain straight
-  back off. A track at −8.1 LUFS peaking over 0 dBFS takes `--gain 3` and gains under 1 LU while the
-  limiter works 4 dB. The editor says so after a preview rather than letting it look like nothing
-  happened.
-
-So the fix for one mod being quieter than another is to raise the quiet one, not to push the loud one
-further.
-
-## What is ported from the Python scaffold, and what changed
-
-Everything the scaffold had implemented is ported 1:1 with its tests: `wem.reader`/`wem.writer`
-(144-byte corpus header, `0xFFFE` extensible tag, hard length gate), `loopfit.scoring`/`ranking`
-(geometric mean, bisect window), `render.plan`/`intro`/`verify`, `pak.layout`, `catalog.sheet`,
-`config`, `core.models`.
-
-Everything the scaffold had stubbed is implemented here: catalog build + store, mod manifest/registry/
-installer/conflicts/build/rebuild, UnrealPak + repak wrappers, seams (equal-power wrap crossfade using
-the pre-roll before the loop head), BS.1770 loudness (K-weighting, gating), a CUE4Parse-free pak scanner
-for third-party conflict detection, Steam auto-detect, and the full UI.
-
-Deliberate deviations, so they don't get relitigated by accident:
-
-- **Analysis is a baseline C# implementation, not librosa.** Spectral-flux onsets, autocorrelation
-  tempo with a log-normal prior and a joint period/phase refinement, fixed 4/4 grid, bass-weighted
-  downbeat choice, chroma+MFCC seam distance, checkerboard structure segmentation. It recovers the tempo
-  of synthetic click tracks to <0.5 % (tests) but is untested on real music; constant tempo only. It sits
-  behind `IBeatTracker`/`ISongAnalyzer` so a better tracker (or a Python/librosa sidecar) can replace it
-  without touching the UI. `BeatGrid.Confidence < 0.5` routes the user to the manual editor.
-- **Time-stretch:** `RubberBandCliStretcher` wraps the rubberband CLI when configured; otherwise
-  `ResampleStretcher` (Hermite resampling) is used, which shifts pitch. Both are behind `IStretcher`.
-- **Loudness normalization is a peak-safe gain.** If hitting the target would push the sample peak
-  above −1 dBFS the gain is capped and the achieved LUFS is reported. A look-ahead peak limiter then
-  runs on every render as a backstop, so nothing reaches the int16 conversion above the ceiling. See
-  [Levels](#levels).
-- **Catalog is a JSON file, not SQLite.** 443 rows, read once at startup, zero native dependencies.
-- **Provisional slots.** Before the catalog is built, ranking runs against the sheet's whole-second
-  lengths so the UI is not empty. Rendering against a provisional slot throws — the exact-length rule
-  is never applied to transcribed numbers.
-- **`Slot.Measured`** and the extra manifest fields (`SeamMetric`, `Lufs`) are additions to the models.
-- **Settings.json** lives in `%LOCALAPPDATA%\TekkenMusicModManager` alongside `catalog.json`,
-  `mods\<id>\` (manifest + WEMs + pak) and scratch. Pass `--app-dir <dir>` to relocate (both the GUI
-  and the CLI accept it).
-
-## Distribution builds
-
-Three ways to ship it, all scripted under `installer\`. Pick by audience:
-
-| Build | Script | Output | .NET runtime | Best for |
-|---|---|---|---|---|
-| **Setup exe (WiX, Visual Studio)** | `installer\build-wix.ps1` or Build in `installer\wix\TekkenMusicModManager.Installer.sln` | `TekkenMusicModManager-Setup-<ver>.exe` (+ `.msi`) | installed by the bootstrapper if missing | end users; the classic "download, double-click, Next" install |
-| **Setup exe (Inno Setup)** | `installer\build-installer.ps1` | `TekkenMusicModManager-Setup-<ver>.exe` | bundled (self-contained) | same audience, with guided tool/game-folder detection pages |
-| **Portable zip** | `installer\build-portable.ps1` | `TekkenMusicModManager-<ver>-portable-win-x64.zip` | bundled in the exe | no-install use; everything stays in one folder |
-
-All three need the .NET 8 SDK on the build machine. None bundle ffmpeg or UnrealPak (licensing — see
-`installer\THIRD-PARTY-NOTICES.txt`); the app detects them, and Settings has an "Install with winget"
-button for ffmpeg. The game folder is auto-detected through Steam on first start.
-
-### Setup exe from Visual Studio (WiX v5)
-
-`installer\wix\` holds two SDK-style WiX projects that Visual Studio 2022 opens (install the free
-*HeatWave for VS2022* extension from FireGiant for editor support; plain `dotnet build` works without
-it). Open `installer\wix\TekkenMusicModManager.Installer.sln`, set Release, and build **Tmm.Bundle**:
-
-1. `Tmm.Msi` publishes the app + CLI framework-dependent (win-x64, ReadyToRun) and packs every
-   published file into a per-machine MSI with Start-menu and desktop shortcuts and a Programs &
-   Features entry. Major upgrades are handled (installing a newer version replaces the old one).
-2. `Tmm.Bundle` downloads the .NET 8 Desktop Runtime installer once (from Microsoft's stable
-   `aka.ms/dotnet/8.0/windowsdesktop-runtime-win-x64.exe` link into `installer\wix\redist\`),
-   embeds it, and emits `TekkenMusicModManager-Setup.exe`: on the user's PC it checks for an x64
-   .NET Desktop Runtime ≥ 8.0 (`DotNetCoreSearch`), installs it if missing, then runs the MSI. The
-   runtime is marked permanent, so uninstalling the app leaves .NET in place.
-
-`installer\build-wix.ps1` does the same from a terminal and copies the results to `installer\Output\`.
-The MSI alone supports silent deployment: `msiexec /i TekkenMusicModManager-0.1.0.msi /qn`.
-
-### Setup exe with Inno Setup
-
-`installer\build-installer.ps1` publishes self-contained and compiles `installer\TekkenMusicModManager.iss`
-(Inno Setup 6.3+, offered via winget if missing). Its wizard adds pages the MSI does not have: detected
-ffmpeg/UnrealPak paths with Browse, an offer to install ffmpeg with winget, and the TEKKEN 8 folder
-(from Steam's registry key and `libraryfolders.vdf`). It writes `install-hints.json` next to the exe,
-which the app folds into its settings on first start. Per-user install by default, no UAC.
-
-### Portable zip
-
-`installer\build-portable.ps1` publishes a single-file, self-contained `TekkenMusicModManager.exe`
-(and `tmm.exe`) with `data\jukebox_slots.csv`, `portable.txt` and an empty `UserData\` folder, then
-zips it. `portable.txt` next to the exe switches the app into portable mode: settings, catalog, mods
-and scratch live in `UserData\` instead of `%LOCALAPPDATA%` (`Constants.IsPortable`). Delete the
-marker to go back. First launch is a second or two slower while the single-file host unpacks its
-native libraries to `%TEMP%`.
-
-### Code signing
-
-None of the outputs are signed, so Windows SmartScreen shows "unrecognized app" on first run. Sign the
-exe/MSI with a code-signing certificate or Azure Trusted Signing before distribution:
-`signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /a <file>`.
-
-## CLI
-
-```
-tmm catalog build --sheet data/jukebox_slots.csv --wems <folder> [--strict]
-tmm catalog status
-tmm analyze <song> [--top 20] [--cap 0.06]
-tmm build <song> --slot <loop_id> --name <name> [--bars N] [--start S] [--gain dB] [--intro-start S] [--no-pack]
-tmm mods list | enable <id> [--force] | disable <id> | rebuild <id> | delete <id>
-tmm wem dump <file.wem>
-tmm find-game
-```
-
-`--no-pack` renders the two WEMs without UnrealPak — useful for checking a render in `wem dump`
-before the packer is set up. `--gain` is the volume trim in dB; the render line reports how much the
-limiter had to take back. `--intro-start` switches the intro to `Detached` and cuts it from that point
-in the song instead of from the material before the loop.
-
-### Intro strategies
-
-| Strategy | Where the intro comes from |
-|---|---|
-| `Real` | The material immediately before the loop start. Needs the loop to start at least an intro's length into the song. |
-| `Detached` | An explicit point in the song, set independently of the loop. Keeps the song's real opening while looping a later section. |
-| `FadeIn` | Whatever lead-in exists, left-padded with silence and faded. |
-| `Silence` | Nothing. |
-| `None` | The slot has no intro WEM. |
-
-`Detached` is the one to reach for when the loop you want is a chorus halfway through: point the intro
-at 0 s and the loop wherever it sounds best, and the two stop being tied together.
-
-## Known gaps / next steps
-
-- Analyzer quality on real music is unmeasured; the Phase-2 exit criterion from `ARCHITECTURE.md`
-  (headline correlates with blind listener ratings on the 20-song set) still stands.
-- `Cue4ParseExtractor` and `FModelCliExtractor` are contracts only; the catalog build wants a folder
-  the user extracted with FModel.
-- `repak` output has not been confirmed to mount in Tekken 8; UnrealPak is the default.
-- The limiter is a peak limiter, not a loudness maximizer: it protects the ceiling but will not make
-  an already-loud master meaningfully louder. There is no true-peak (inter-sample) detection.
-- Stock-loop LUFS measurement (to derive the game's own loudness target) needs a Wwise-Vorbis decoder
-  (vgmstream) and is not wired; the target is a user setting for now.
-- No LLM features (explanations, mood matching) — per the architecture, not v1.
+TEKKEN is a trademark of Bandai Namco Entertainment. This is an unofficial fan tool, not affiliated with
+or endorsed by them. No game files or artwork are distributed with it.

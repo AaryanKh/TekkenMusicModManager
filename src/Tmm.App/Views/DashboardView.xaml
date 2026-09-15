@@ -286,10 +286,19 @@
             </Border.Style>
             <Grid DataContext="{Binding SelectedRow}">
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <StackPanel>
+
+                <!-- The selected tile's art, repeated here so the panel reads as belonging to it. -->
+                <Border Grid.Column="0" Width="86" Height="86" CornerRadius="5" ClipToBounds="True" VerticalAlignment="Top"
+                        Margin="0,2,14,0" BorderThickness="1" BorderBrush="{StaticResource BorderBrush}"
+                        Background="{StaticResource Panel2Brush}">
+                    <Image Source="{Binding CoverForState}" Stretch="UniformToFill"/>
+                </Border>
+
+                <StackPanel Grid.Column="1">
                     <DockPanel>
                         <Border Style="{StaticResource Badge}" DockPanel.Dock="Right" Margin="10,0,0,0" VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal">
@@ -313,7 +322,7 @@
                     <TextBlock Text="No album art for this tile — showing a placeholder. Use Find art to look one up." Style="{StaticResource Muted}" FontSize="11" Margin="0,2,0,0"
                                Visibility="{Binding HasOwnArt, Converter={StaticResource Vis}, ConverterParameter=invert}"/>
                 </StackPanel>
-                <StackPanel Grid.Column="1" VerticalAlignment="Top" Margin="12,0,0,0">
+                <StackPanel Grid.Column="2" VerticalAlignment="Top" Margin="12,0,0,0">
                     <StackPanel Orientation="Horizontal">
                         <Button Content="Enable" Style="{StaticResource SmallButton}"
                                 Command="{Binding DataContext.EnableCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"

@@ -16,6 +16,9 @@ public interface IDialogService
 public interface IAudioPreview
 {
     bool IsPlaying { get; }
+    /// <summary>Loaded and playing, but held. <see cref="IsPlaying"/> stays true while paused: the
+    /// file is still open and Resume picks up where it left off.</summary>
+    bool IsPaused { get; }
     /// <summary>How far into the current file playback has reached, in seconds.</summary>
     double PositionSec { get; }
     /// <summary>Length of the file being played, or 0 when nothing is loaded.</summary>
@@ -24,6 +27,8 @@ public interface IAudioPreview
     /// <summary>Raised while playing so a playhead can follow along. Fires on the UI thread.</summary>
     event EventHandler? PositionChanged;
     void Play(string wavPath);
+    void Pause();
+    void Resume();
     /// <summary>Jump to a point in the current file. Ignored when nothing is playing.</summary>
     void Seek(double sec);
     void Stop();

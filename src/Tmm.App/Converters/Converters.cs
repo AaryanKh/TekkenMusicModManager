@@ -82,3 +82,28 @@ public sealed class AnyTrueConverter : IMultiValueConverter
     public object Convert(object[] values, Type t, object p, CultureInfo c) => values.Any(v => v is true);
     public object[] ConvertBack(object value, Type[] t, object p, CultureInfo c) => throw new NotSupportedException();
 }
+
+/// <summary>true when the bound number is below the ConverterParameter. Drives the layout swap that
+/// moves the track player onto its own row once the panel gets narrow.</summary>
+public sealed class IsLessThanConverter : IValueConverter
+{
+    public object Convert(object value, Type t, object p, CultureInfo c)
+    {
+        double v = value is double d ? d : 0;
+        double limit = p is string s && double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var l) ? l : 0;
+        return v > 0 && v < limit;
+    }
+    public object ConvertBack(object value, Type t, object p, CultureInfo c) => throw new NotSupportedException();
+}
+
+/// <summary>Seconds as m:ss, for the player's clock.</summary>
+public sealed class ClockConverter : IValueConverter
+{
+    public object Convert(object value, Type t, object p, CultureInfo c)
+    {
+        if (value is not double s || double.IsNaN(s) || double.IsInfinity(s)) return "0:00";
+        var ts = TimeSpan.FromSeconds(Math.Max(0, s));
+        return $"{(int)ts.TotalMinutes}:{ts.Seconds:00}";
+    }
+    public object ConvertBack(object value, Type t, object p, CultureInfo c) => throw new NotSupportedException();
+}

@@ -113,6 +113,9 @@ public sealed class DashboardViewModel : ObservableObject
         GoToSettingsCommand = new RelayCommand(() => SettingsRequested?.Invoke(this, EventArgs.Empty));
         NewModCommand = new RelayCommand(() => NewModRequested?.Invoke(this, EventArgs.Empty));
         ToggleViewCommand = new RelayCommand(() => ShowTiles = !ShowTiles);
+        PlayPauseCommand = new RelayCommand(OnPlayPause, () => CanPlay);
+        _app.Preview.PositionChanged += (_, _) => OnPlayerTick();
+        _app.Preview.PlaybackEnded += (_, _) => { if (IsOurs) { _playingModId = null; _fromTicker = true; PlayerPositionSec = 0; _fromTicker = false; } RaisePlayerState(); };
         ClearSelectionCommand = new RelayCommand(() => SelectedRow = null, () => HasSelection);
         FindArtCommand = new AsyncRelayCommand(p => FindArtAsync(p as ModRow), p => p is ModRow r && !IsBusy && !r.SongMissing);
         RemoveArtCommand = new RelayCommand(p => RemoveArt(p as ModRow), p => p is ModRow r && r.HasOwnArt && !IsBusy);
@@ -140,6 +143,7 @@ public sealed class DashboardViewModel : ObservableObject
     public RelayCommand GoToSettingsCommand { get; }
     public RelayCommand NewModCommand { get; }
     public RelayCommand ToggleViewCommand { get; }
+    public RelayCommand PlayPauseCommand { get; }
     public RelayCommand ClearSelectionCommand { get; }
     public AsyncRelayCommand FindArtCommand { get; }
     public RelayCommand RemoveArtCommand { get; }
@@ -175,7 +179,13 @@ public sealed class DashboardViewModel : ObservableObject
     public ModRow? SelectedRow
     {
         get => _selectedRow;
-        set { if (SetProperty(ref _selectedRow, value)) { OnPropertyChanged(nameof(HasSelection)); RaiseCommands(); } }
+        set
+        {
+            if (!SetProperty(ref _selectedRow, value)) return;
+            StopPlayer();                       // a different mod means a different song
+            OnPropertyChanged(nameof(HasSelection));
+            RaiseCommands();
+        }
     }
     public bool HasSelection => _selectedRow is not null;
     public string CountLine => Rows.Count == 0 ? "No mods yet." :
@@ -258,6 +268,115 @@ public sealed class DashboardViewModel : ObservableObject
         row.CoverGray = _app.Covers.Gray(shown);
         row.Cover = shown;
         RemoveArtCommand.RaiseCanExecuteChanged();
+    }
+
+    // ------------------------------------------------------------------ track player
+
+    private string? _playingModId;
+    private double _playerPosition;
+    private bool _fromTicker;
+
+    /// <summary>Only a selected mod with its song still on disk can be played.</summary>
+    public bool CanPlay => _selectedRow is { SongMissing: false };
+
+    /// <summary>True while this dashboard's player owns what the audio service is playing. The editor
+    /// shares that service, so the button must not claim a preview it did not start.</summary>
+    private bool IsOurs => _playingModId is not null && _playingModId == _selectedRow?.Manifest.ModId;
+
+    public bool IsPlayerActive => IsOurs && _app.Preview.IsPlaying;
+    public bool IsPlayerPaused => IsPlayerActive && _app.Preview.IsPaused;
+    public string PlayPauseGlyph => IsPlayerActive && !IsPlayerPaused ? "❚❚" : "▶";
+
+    public double PlayerDurationSec => IsOurs ? Math.Max(0, _app.Preview.DurationSec) : 0;
+
+    /// <summary>Bound two-way to the scrub bar. Writes from the ticker must not be read back as a
+    /// seek, or playback would fight the user's drag.</summary>
+    public double PlayerPositionSec
+    {
+        get => _playerPosition;
+        set
+        {
+            if (!SetProperty(ref _playerPosition, value)) return;
+            if (!_fromTicker && IsOurs) _app.Preview.Seek(value);
+        }
+    }
+
+    public string PlayerTimeText => $"{Clock(PlayerPositionSec)} / {Clock(PlayerDurationSec)}";
+
+    private static string Clock(double s)
+    {
+        if (double.IsNaN(s) || double.IsInfinity(s) || s < 0) s = 0;
+        var ts = TimeSpan.FromSeconds(s);
+        return $"{(int)ts.TotalMinutes}:{ts.Seconds:00}";
+    }
+
+    /// <summary>What the player is playing: the song the mod was built from.</summary>
+    public string PlayerTitle => _selectedRow is null ? ""
+        : _selectedRow.SongMissing ? "Source song is missing" : _selectedRow.SongFile;
+
+    private void OnPlayPause()
+    {
+        var row = _selectedRow;
+        if (row is null || row.SongMissing) return;
+
+        if (IsOurs && _app.Preview.IsPlaying)
+        {
+            if (_app.Preview.IsPaused) _app.Preview.Resume(); else _app.Preview.Pause();
+            RaisePlayerState();
+            return;
+        }
+
+        try
+        {
+            _app.Preview.Play(row.Manifest.SongPath);
+            _playingModId = row.Manifest.ModId;
+            // Start where the mod's loop does, so pressing play lands on the part that was used
+            // rather than an intro the mod may not even include.
+            _startAtSec = row.Manifest.Plan.LoopStartSec;
+            RaisePlayerState();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            _app.Dialogs.ShowError("Could not play this song", e.Message);
+        }
+    }
+
+    private double _startAtSec;
+
+    /// <summary>Stop whatever this dashboard started. Leaves an editor preview alone.</summary>
+    private void StopPlayer()
+    {
+        if (IsOurs && _app.Preview.IsPlaying) _app.Preview.Stop();
+        _playingModId = null;
+        _startAtSec = 0;
+        _fromTicker = true; PlayerPositionSec = 0; _fromTicker = false;
+        RaisePlayerState();
+    }
+
+    private void OnPlayerTick()
+    {
+        if (!IsOurs) return;
+        // The seek has to wait until the file is open and its length is known.
+        if (_startAtSec > 0 && _app.Preview.DurationSec > 0)
+        {
+            var target = Math.Min(_startAtSec, Math.Max(0, _app.Preview.DurationSec - 1));
+            _startAtSec = 0;
+            _app.Preview.Seek(target);
+        }
+        _fromTicker = true;
+        PlayerPositionSec = _app.Preview.PositionSec;
+        _fromTicker = false;
+        OnPropertyChanged(nameof(PlayerTimeText));
+        OnPropertyChanged(nameof(PlayerDurationSec));
+    }
+
+    private void RaisePlayerState()
+    {
+        OnPropertyChanged(nameof(IsPlayerActive)); OnPropertyChanged(nameof(IsPlayerPaused));
+        OnPropertyChanged(nameof(PlayPauseGlyph)); OnPropertyChanged(nameof(PlayerDurationSec));
+        OnPropertyChanged(nameof(PlayerTimeText)); OnPropertyChanged(nameof(CanPlay));
+        OnPropertyChanged(nameof(PlayerTitle));
+        PlayPauseCommand.RaiseCanExecuteChanged();
     }
 
     // ------------------------------------------------------------------ album art actions (tile view)

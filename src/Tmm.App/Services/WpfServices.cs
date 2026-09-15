@@ -56,6 +56,7 @@ public sealed class MediaPlayerPreview : IAudioPreview
     private readonly MediaPlayer _player = new();
     private readonly DispatcherTimer _ticker;
     private bool _playing;
+    private bool _paused;
 
     public MediaPlayerPreview()
     {
@@ -81,6 +82,7 @@ public sealed class MediaPlayerPreview : IAudioPreview
     }
 
     public bool IsPlaying => _playing;
+    public bool IsPaused => _paused;
     public double PositionSec => _player.Position.TotalSeconds;
     public double DurationSec => _player.NaturalDuration.HasTimeSpan ? _player.NaturalDuration.TimeSpan.TotalSeconds : 0;
 
@@ -94,7 +96,26 @@ public sealed class MediaPlayerPreview : IAudioPreview
         _player.Stop();
         _player.Close();
         _playing = true;
+        _paused = false;
         _player.Open(new Uri(wavPath, UriKind.Absolute));
+    }
+
+    public void Pause()
+    {
+        if (!_playing || _paused) return;
+        _player.Pause();
+        _paused = true;
+        _ticker.Stop();
+        PositionChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void Resume()
+    {
+        if (!_playing || !_paused) return;
+        _player.Play();
+        _paused = false;
+        _ticker.Start();
+        PositionChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public void Seek(double sec)
@@ -109,6 +130,7 @@ public sealed class MediaPlayerPreview : IAudioPreview
     {
         bool was = _playing;
         _playing = false;
+        _paused = false;
         _ticker.Stop();
         _player.Stop();
         _player.Close();          // always release the file, even if we thought we were idle
@@ -118,6 +140,7 @@ public sealed class MediaPlayerPreview : IAudioPreview
     private void Finish()
     {
         _playing = false;
+        _paused = false;
         _ticker.Stop();
         PositionChanged?.Invoke(this, EventArgs.Empty);
         PlaybackEnded?.Invoke(this, EventArgs.Empty);

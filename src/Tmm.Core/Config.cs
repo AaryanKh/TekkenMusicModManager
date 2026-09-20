@@ -83,6 +83,10 @@ public sealed class Settings
     public bool LlmExplanations { get; set; } = false;
     /// <summary>Dashboard shows album-art tiles instead of the table. Purely a view preference.</summary>
     public bool DashboardTiles { get; set; } = false;
+    /// <summary>Also write a small <c>&lt;pak&gt;.tmm.json</c> beside each pak that is built. It travels with
+    /// the pak into ~mods, so the manager can recognise the pak later (see <c>ModMetadata</c>). Off by
+    /// default: nothing extra is written unless asked for.</summary>
+    public bool WriteModMetadata { get; set; } = false;
 
     [JsonIgnore] public string CatalogPath => Path.Combine(AppDir, "catalog.json");
     /// <summary>Where we keep manifests + rendered WEMs + paks, independent of the game dir.</summary>

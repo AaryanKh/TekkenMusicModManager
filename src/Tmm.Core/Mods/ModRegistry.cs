@@ -1,3 +1,5 @@
+using Tmm.Core.Pak;
+
 namespace Tmm.Core.Mods;
 
 /// <summary>
@@ -44,6 +46,75 @@ public sealed class ModRegistry
     }
 
     public void Save(ModManifest m) => ManifestIo.Save(m, ModDir(m));
+
+    // ------------------------------------------------------------------ pak name uniqueness
+
+    // Everything downstream keys on the pak file name: ~mods holds one file per name, and ModState
+    // reads "Enabled" whenever a file of that name exists. Two mods sharing a name would therefore
+    // both read Enabled while the second one silently replaced the first's audio. So a name is
+    // refused when a new mod is created, and a shared name is refused again when a mod is enabled.
+
+    private static bool SamePak(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Why <paramref name="modName"/> cannot be used for a new mod, or null when it is free. The name is
+    /// compared the way it will be written to disk, after sanitising, so "My Song!" and "My Song" are the
+    /// same pak. Taken means one of your mods already owns the file name, or a pak by that name is already
+    /// in ~mods (somebody else's, since none of yours has it yet).
+    /// </summary>
+    public string? FindNameConflict(string modName)
+    {
+        var pakName = PakLayout.PakFilename(PakLayout.SanitizeModName(modName));
+
+        var owner = All().FirstOrDefault(m => SamePak(m.PakName, pakName));
+        if (owner is not null)
+            return $"'{owner.PakName}' is already used by your mod '{owner.Name}'. Choose a different name.";
+
+        var modsDir = Settings.GameModsDir;
+        if (modsDir is not null && Directory.Exists(modsDir))
+        {
+            try
+            {
+                // Same recursive scope as the third-party scan, so a pak in a subfolder counts too.
+                var existing = Directory.EnumerateFiles(modsDir, "*.pak", SearchOption.AllDirectories)
+                                        .FirstOrDefault(f => SamePak(Path.GetFileName(f), pakName));
+                if (existing is not null)
+                    return $"A pak named '{pakName}' is already in ~mods and was not built by this app. " +
+                           "Enabling this mod would overwrite it. Choose a different name.";
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // An unreadable folder must not block building; ModBuilder and Enable still guard.
+            }
+        }
+        return null;
+    }
+
+    /// <summary><paramref name="name"/> if it is free, otherwise the first "name_2", "name_3", … that is.</summary>
+    public string MakeUniqueName(string name)
+    {
+        if (FindNameConflict(name) is null) return name;
+        for (int n = 2; n < 1000; n++)
+        {
+            var candidate = $"{name}_{n}";
+            if (FindNameConflict(candidate) is null) return candidate;
+        }
+        return name;
+    }
+
+    /// <summary>Throws when another mod of ours has the same pak file name as <paramref name="m"/>.
+    /// Mods built before names were checked can already be in this state.</summary>
+    public void EnsurePakNameUnique(ModManifest m)
+    {
+        var twin = All().FirstOrDefault(o => o.ModId != m.ModId && SamePak(o.PakName, m.PakName));
+        if (twin is null) return;
+        var who = string.Equals(m.Name, twin.Name, StringComparison.OrdinalIgnoreCase)
+            ? $"Two of your mods are both called '{m.Name}'"
+            : $"'{m.Name}' and '{twin.Name}' use the same pak file";
+        throw new InstallException(
+            $"{who} ('{m.PakName}'), so installing one would overwrite the other in ~mods. " +
+            "Delete one of them and build it again under a different name.");
+    }
 
     /// <summary>Store an edited plan without rebuilding. The mod reads as STALE until Rebuild replays it.</summary>
     public void UpdatePlan(ModManifest m, RenderPlan plan)

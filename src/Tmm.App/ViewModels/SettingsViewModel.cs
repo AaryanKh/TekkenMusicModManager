@@ -103,6 +103,7 @@ public sealed class SettingsViewModel : ObservableObject
     public bool UseLoudnessTarget { get => _draft.TargetLufs is not null; set { _draft.TargetLufs = value ? (_draft.TargetLufs ?? -16.0) : null; Touch(); OnPropertyChanged(nameof(TargetLufs)); } }
     public double TargetLufs { get => _draft.TargetLufs ?? -16.0; set { if (_draft.TargetLufs is not null) { _draft.TargetLufs = Math.Clamp(value, -30, -6); Touch(); } } }
     public bool IncludeCoverage { get => _draft.IncludeCoverageInScore; set { _draft.IncludeCoverageInScore = value; _draft.CoverageWeight = value ? Math.Max(0.3, _draft.CoverageWeight) : 0; Touch(); } }
+    public bool WriteModMetadata { get => _draft.WriteModMetadata; set { _draft.WriteModMetadata = value; Touch(); } }
     public string AppDir => _draft.AppDir;
 
     public bool Dirty { get => _dirty; private set { if (SetProperty(ref _dirty, value)) { SaveCommand.RaiseCanExecuteChanged(); RevertCommand.RaiseCanExecuteChanged(); } } }

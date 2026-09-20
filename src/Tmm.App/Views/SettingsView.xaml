@@ -158,6 +158,16 @@
                     <CheckBox Content="Include coverage (share of the song used) in the compatibility score — taste, not defect" IsChecked="{Binding IncludeCoverage}"/>
                 </StackPanel>
             </Border>
+
+            <!-- Built mods -->
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Built mods" Style="{StaticResource H2}" Margin="0,0,0,8"/>
+                    <CheckBox Content="Write a small metadata file (.tmm.json) beside each pak I build" IsChecked="{Binding WriteModMetadata}"/>
+                    <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="24,4,0,0"
+                               Text="It names the mod, its slot and its WEMs, and is copied into ~mods with the pak. Scan on the Dashboard uses it to recognise the pak later: on a new PC, after clearing the app's data, or when you send the pak to someone. It holds no file paths. Applies to mods built or rebuilt from now on; the game ignores the extra file."/>
+                </StackPanel>
+            </Border>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

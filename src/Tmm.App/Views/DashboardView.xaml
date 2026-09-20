@@ -258,9 +258,14 @@
                 <ItemsControl ItemsSource="{Binding ThirdParty}" Margin="0,4,0,0">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <TextBlock FontSize="12">
-                                <Run Text="{Binding File, Mode=OneWay}" FontWeight="SemiBold"/><Run Text=" — "/><Run Text="{Binding Count, Mode=OneWay}"/><Run Text=" WEM(s): "/><Run Text="{Binding Ids, Mode=OneWay}"/>
-                            </TextBlock>
+                            <StackPanel Margin="0,0,0,2">
+                                <TextBlock FontSize="12">
+                                    <Run Text="{Binding File, Mode=OneWay}" FontWeight="SemiBold"/><Run Text=" — "/><Run Text="{Binding Count, Mode=OneWay}"/><Run Text=" WEM(s): "/><Run Text="{Binding Ids, Mode=OneWay}"/>
+                                </TextBlock>
+                                <!-- Only when the pak carries every WEM of a catalog slot, i.e. we know which track it replaces. -->
+                                <TextBlock Text="{Binding Replaces, Mode=OneWay}" FontSize="12" TextWrapping="Wrap" Margin="14,0,0,0"
+                                           Visibility="{Binding Replaces, Converter={StaticResource Vis}}"/>
+                            </StackPanel>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
@@ -321,10 +326,10 @@
                     <TextBlock Text="{Binding LoudnessSummary}" FontSize="12" Style="{StaticResource Muted}"
                                Visibility="{Binding LoudnessSummary, Converter={StaticResource Vis}}"/>
                     <TextBlock FontSize="12" Style="{StaticResource Muted}">
-                        <Run Text="Overrides WEM IDs "/><Run Text="{Binding WemIds, Mode=OneWay}"/><Run Text="  ·  source: "/><Run Text="{Binding SongPath, Mode=OneWay}"/>
+                        <Run Text="Overrides WEM IDs "/><Run Text="{Binding WemIds, Mode=OneWay}"/><Run Text="  ·  source: "/><Run Text="{Binding SourceText, Mode=OneWay}"/>
                     </TextBlock>
                     <TextBlock Text="Source song file is missing — Rebuild and Edit need it." Style="{StaticResource Warning}" FontSize="12"
-                               Visibility="{Binding SongMissing, Converter={StaticResource Vis}}"/>
+                               Visibility="{Binding ShowSongMissing, Converter={StaticResource Vis}}"/>
                     <TextBlock Text="No album art for this tile — showing a placeholder. Use Find art to look one up." Style="{StaticResource Muted}" FontSize="11" Margin="0,2,0,0"
                                Visibility="{Binding HasOwnArt, Converter={StaticResource Vis}, ConverterParameter=invert}"/>
                 </StackPanel>
@@ -456,10 +461,10 @@
                                 <TextBlock Text="{Binding LoudnessSummary}" FontSize="12" Style="{StaticResource Muted}"
                                            Visibility="{Binding LoudnessSummary, Converter={StaticResource Vis}}"/>
                                 <TextBlock FontSize="12" Style="{StaticResource Muted}">
-                                    <Run Text="Overrides WEM IDs "/><Run Text="{Binding WemIds, Mode=OneWay}"/><Run Text="  ·  source: "/><Run Text="{Binding SongPath, Mode=OneWay}"/>
+                                    <Run Text="Overrides WEM IDs "/><Run Text="{Binding WemIds, Mode=OneWay}"/><Run Text="  ·  source: "/><Run Text="{Binding SourceText, Mode=OneWay}"/>
                                 </TextBlock>
                                 <TextBlock Text="Source song file is missing — Rebuild and Edit need it." Style="{StaticResource Warning}" FontSize="12"
-                                           Visibility="{Binding SongMissing, Converter={StaticResource Vis}}"/>
+                                           Visibility="{Binding ShowSongMissing, Converter={StaticResource Vis}}"/>
                             </StackPanel>
                         </Border>
                     </DataTemplate>

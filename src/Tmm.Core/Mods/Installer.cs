@@ -14,6 +14,10 @@ public static class Installer
         if (!File.Exists(store))
             throw new InstallException($"'{m.Name}' has no built pak in the app store; rebuild it first.");
 
+        // Not skipped by force: that only overrides overlapping audio, whereas a shared file name means
+        // this pak would replace the other mod's file outright.
+        reg.EnsurePakNameUnique(m);
+
         if (!force)
         {
             var conflicts = Conflicts.Check(m.WemIds, reg, modsDir, m.Name, excludeMod: m.ModId);
@@ -24,13 +28,23 @@ public static class Installer
         }
 
         Directory.CreateDirectory(modsDir);   // "~mods", never "Mods" — Spike B Test 8
-        FileOps.Copy(store, Path.Combine(modsDir, m.PakName));
+        var installed = Path.Combine(modsDir, m.PakName);
+        FileOps.Copy(store, installed);
+
+        // The metadata file, when this mod has one, goes in beside its pak. When it does not, clear any
+        // earlier one so ~mods never holds a file describing a pak it no longer matches.
+        var metaSrc = ModMetadata.PathFor(store);
+        var metaDst = ModMetadata.PathFor(installed);
+        if (File.Exists(metaSrc)) FileOps.Copy(metaSrc, metaDst);
+        else FileOps.DeleteFile(metaDst);
     }
 
     public static void Disable(ModManifest m, ModRegistry reg)
     {
         var installed = reg.InstalledPak(m);
-        if (installed is not null) FileOps.DeleteFile(installed);
+        if (installed is null) return;
+        FileOps.DeleteFile(installed);
+        FileOps.DeleteFile(ModMetadata.PathFor(installed));   // it was copied in with the pak, so it leaves with it
     }
 
     /// <summary>Disable, then remove from the app store. The only destructive operation.</summary>

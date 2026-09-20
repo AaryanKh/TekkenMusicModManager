@@ -162,6 +162,27 @@ to re-measure the slot list in Settings to use those slots.
 **Can I rename my mods?** Yes. Rename the `.pak` in `~mods` however you like, then press **Scan ~mods**
 on the Dashboard and the app will recognise it and update itself to match.
 
+**Can two mods have the same name?** No. A mod's name becomes its pak's file name, and `~mods` holds one
+file per name, so a second mod with the same name would silently replace the first. The editor tells you
+when a name is taken (including by a pak in `~mods` that this app did not build) and will not build until
+you change it. A new mod starts with a free name, so building one song into two slots just works.
+
+**What does the third-party list under Scan tell me?** Which other paks in `~mods` override jukebox audio.
+When a pak carries both WEMs of a jukebox track (its intro and its loop), the line also says which track it
+replaces, for example `Replaces: Character Select (Arcade ver.) / TEKKEN`. A pak with only half a track's
+WEMs is listed without a name.
+
+**Can the app recognise my mods on a new PC, or a pak I send someone?** Turn on **Settings → Built mods →
+Write a small metadata file** (off by default). Each pak you build or rebuild from then on gets a
+`<name>_P.pak.tmm.json` beside it. Enabling a mod copies that file into `~mods` with the pak, and disabling
+removes it. It names the mod, its slot and its WEMs, and holds no file paths. On another machine, or after
+clearing the app's data, **Scan ~mods** finds a pak that carries one and offers to import it. An imported
+mod can be enabled, disabled and deleted, but not edited or rebuilt, because the source song and your
+settings are not part of the file. The game ignores the extra file.
+
+**Do previews pile up?** No. Preview audio is temporary and is cleared when the app closes (and again on
+start, in case it was ever killed).
+
 **Why does my song sound slightly off-pitch?** Because it needed stretching to fit the slot, and without
 `rubberband.exe` the pitch moves with it. Either install rubberband, or pick a loop length closer to the
 slot's own.
@@ -178,8 +199,8 @@ arguments for the full list.
 
 ```
 tmm analyze <song>                                  rank every slot for a song
-tmm build <song> --slot <id> [--name <name>]        build a mod
-tmm mods list | scan [--adopt] | enable <id> | disable <id> | rebuild <id> | delete <id>
+tmm build <song> --slot <id> [--name <name>] [--metadata]   build a mod (--metadata also writes the .tmm.json)
+tmm mods list | scan [--adopt] [--import] | enable <id> | disable <id> | rebuild <id> | delete <id>
 tmm find-game                                       locate the TEKKEN 8 install
 ```
 

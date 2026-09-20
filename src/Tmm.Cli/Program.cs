@@ -15,8 +15,8 @@ using Tmm.Core.Wem;
 //   tmm catalog build --sheet data/jukebox_slots.csv --wems <folder>
 //   tmm catalog status
 //   tmm analyze <song> [--top 20] [--cap 0.06]
-//   tmm build <song> --slot <loop_id> --name MySong [--bars N] [--start S] [--gain dB] [--intro-start S] [--no-pack]
-//   tmm mods list | enable <id> | disable <id> | rebuild <id> | delete <id>
+//   tmm build <song> --slot <loop_id> --name MySong [--bars N] [--start S] [--gain dB] [--intro-start S] [--metadata] [--no-pack]
+//   tmm mods list | scan [--adopt] [--import] | enable <id> | disable <id> | rebuild <id> | delete <id>
 //   tmm wem dump <file.wem>
 //   tmm find-game
 //   (global) --app-dir <dir>
@@ -62,8 +62,8 @@ static class Cli
         "tmm catalog build --sheet <csv> --wems <folder> [--strict]\n" +
         "tmm catalog status\n" +
         "tmm analyze <song> [--top N] [--cap 0.06]\n" +
-        "tmm build <song> --slot <loop_id> [--name <name>] [--bars N] [--start S] [--gain dB] [--intro-start S] [--no-pack]\n" +
-        "tmm mods list | scan [--adopt] | enable <id> | disable <id> | rebuild <id> | delete <id>\n" +
+        "tmm build <song> --slot <loop_id> [--name <name>] [--bars N] [--start S] [--gain dB] [--intro-start S] [--metadata] [--no-pack]\n" +
+        "tmm mods list | scan [--adopt] [--import] | enable <id> | disable <id> | rebuild <id> | delete <id>\n" +
         "tmm wem dump <file.wem>\n" +
         "tmm find-game\n" +
         "global: --app-dir <dir>");
@@ -154,6 +154,8 @@ static class Cli
         int? bars = Take(args, "--bars") is string b ? int.Parse(b) : null;
         double? start = Take(args, "--start") is string st ? double.Parse(st, CultureInfo.InvariantCulture) : null;
         bool noPack = Flag(args, "--no-pack");
+        // Also write <pak>.tmm.json beside the pak, for this build even when the setting is off. In memory only; nothing is saved.
+        if (Flag(args, "--metadata")) s.WriteModMetadata = true;
         double? gainDb = Take(args, "--gain") is string g ? double.Parse(g, CultureInfo.InvariantCulture) : null;
         double? introStart = Take(args, "--intro-start") is string istr ? double.Parse(istr, CultureInfo.InvariantCulture) : null;
         if (args.Count == 0) return Fail("build <song> --slot <loop_id> --name <name>");
@@ -220,7 +222,16 @@ static class Cli
         var builder = new ModBuilder(reg, stretcher, PackerFactory.FromSettings(s));
         var m = builder.Build(name, songPath, analyzed.Pcm, slot, plan, new Progress<(int, int, string)>(p => Console.Error.WriteLine($"  {p.Item3}")));
         Console.WriteLine($"built mod {m.ModId} ({m.Name}) -> {reg.StorePak(m)}. Enable with: tmm mods enable {m.ModId}");
+        if (s.WriteModMetadata) Console.WriteLine($"metadata: {ModMetadata.PathFor(reg.StorePak(m))}");
         return 0;
+    }
+
+    /// <summary>"third-party: X_P.pak overrides 2 WEM(s)", plus the track when it carries a whole catalog slot.</summary>
+    static string ThirdPartyLine(ThirdPartyPak t, Settings s)
+    {
+        var catalog = new CatalogStore(s.CatalogPath);
+        var replaces = catalog.IsBuilt ? ReplacedTracks.Describe(t.WemIds, catalog.AllSlots()) : "";
+        return $"third-party: {Path.GetFileName(t.Path)} overrides {t.WemIds.Count} WEM(s)" + (replaces.Length > 0 ? $"  -  {replaces}" : "");
     }
 
     static int Mods(List<string> args, Settings s)
@@ -232,9 +243,9 @@ static class Cli
             var all = reg.All();
             if (all.Count == 0) { Console.WriteLine("no mods built yet"); return 0; }
             foreach (var m in all)
-                Console.WriteLine($"{m.ModId}  {reg.StateOf(m),-8}  {m.Name,-24}  slot {m.SlotKey} ({Trunc(m.SlotTitle, 40)})  {m.Updated:u}");
+                Console.WriteLine($"{m.ModId}  {reg.StateOf(m),-8}  {m.Name,-24}  slot {m.SlotKey} ({Trunc(m.SlotTitle, 40)})  {m.Updated:u}{(m.Imported ? "  [imported]" : "")}");
             var tp = Conflicts.ScanThirdParty(reg, s.GameModsDir);
-            foreach (var t in tp) Console.WriteLine($"third-party: {Path.GetFileName(t.Path)} overrides {t.WemIds.Count} WEM(s)");
+            foreach (var t in tp) Console.WriteLine(ThirdPartyLine(t, s));
             return 0;
         }
         if (args[0] == "scan")
@@ -256,8 +267,22 @@ static class Cli
                 else
                     Console.WriteLine("re-run with --adopt to point the manifests at the new names");
             }
+            // Paks that carry a .tmm.json but are not in the mod list. Listed before the third-party rows
+            // so that, once imported, they are no longer counted as somebody else's.
+            bool import = Flag(args, "--import");
+            var recognised = ModImport.Find(reg, s.GameModsDir);
+            if (recognised.Count > 0)
+            {
+                Console.WriteLine($"{recognised.Count} pak(s) in ~mods carry a metadata file but are not in your mod list:");
+                foreach (var r in recognised)
+                    Console.WriteLine($"  {r.Meta.Name}: {(r.Meta.SlotTitle.Length > 0 ? r.Meta.SlotTitle : "slot " + r.Meta.SlotKey)}{(r.Meta.SongFile.Length > 0 ? "  (from " + r.Meta.SongFile + ")" : "")}");
+                if (import)
+                    foreach (var line in ModImport.Import(reg, recognised).Notes) Console.WriteLine("  " + line);
+                else
+                    Console.WriteLine("re-run with --import to add them (they cannot be edited or rebuilt: the song and settings are not in the metadata)");
+            }
             var tp = Conflicts.ScanThirdParty(reg, s.GameModsDir);
-            foreach (var t in tp) Console.WriteLine($"third-party: {Path.GetFileName(t.Path)} overrides {t.WemIds.Count} WEM(s)");
+            foreach (var t in tp) Console.WriteLine(ThirdPartyLine(t, s));
             return 0;
         }
         if (args.Count < 2) return Fail($"mods {args[0]} <mod_id>");

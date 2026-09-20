@@ -24,6 +24,9 @@ public sealed class ModBuilder
     public ModManifest Build(string name, string songPath, PcmBuffer pcm, Slot slot, RenderPlan plan,
                              IProgress<(int done, int total, string what)>? progress = null)
     {
+        // Before any rendering: a name that another pak already owns is a mistake, not something to fix later.
+        if (_reg.FindNameConflict(name) is string taken)
+            throw new InstallException(taken);
         var safe = PakLayout.SanitizeModName(name);
         var m = new ModManifest
         {
@@ -45,8 +48,12 @@ public sealed class ModBuilder
     public ModManifest Rebuild(ModManifest m, Slot slot, string ffmpeg,
                                IProgress<(int done, int total, string what)>? progress = null)
     {
+        if (m.Imported)
+            throw new InstallException($"'{m.Name}' was imported from a metadata file, which has neither its source song nor its settings, so it cannot be rebuilt.");
         if (!File.Exists(m.SongPath))
             throw new InstallException($"'{m.Name}': source song no longer exists at {m.SongPath}");
+        // An enabled mod is re-installed at the end, so refuse a shared pak name now rather than after a render.
+        if (_reg.IsEnabled(m)) _reg.EnsurePakNameUnique(m);
         progress?.Report((0, 4, "Decoding song"));
         var (_, pcm) = Decoder.Decode(m.SongPath, ffmpeg);
         bool wasEnabled = _reg.IsEnabled(m);
@@ -82,6 +89,12 @@ public sealed class ModBuilder
         // Manifest is written after the pak, so Updated <= pak mtime + epsilon and the state reads
         // Disabled/Enabled, not Stale. Touch the pak to make that unambiguous on coarse filesystems.
         File.SetLastWriteTimeUtc(_reg.StorePak(m), DateTime.UtcNow);
+
+        // Optional metadata file beside the pak. Written on every build and rebuild while the setting is
+        // on, and removed when it is off, so the one in the store never describes an older pak.
+        var sidecar = ModMetadata.PathFor(_reg.StorePak(m));
+        if (_reg.Settings.WriteModMetadata) ModMetadata.Write(m, _reg.StorePak(m));
+        else FileOps.DeleteFile(sidecar);
         progress?.Report((4, 4, "Done"));
     }
 }

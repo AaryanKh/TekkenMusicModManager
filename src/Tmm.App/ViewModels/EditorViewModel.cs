@@ -31,6 +31,7 @@ public sealed class EditorViewModel : ObservableObject
     private RenderPlan _plan = new();
     private bool _userPickedIntro;
     private string _modName = "";
+    private string? _nameConflict;
     private bool _isBusy;
     private string _busyText = "";
     private string _previewInfo = "";
@@ -97,7 +98,9 @@ public sealed class EditorViewModel : ObservableObject
         _app.Preview.Stop();
         _song = song; _slot = slot; _recommended = recommended; _existing = null; _userPickedIntro = false;
         _peaks = ComputePeaks(song.Pcm, WaveformColumns);
-        _modName = SuggestName(song.Song.Title);
+        // A second mod from the same song would otherwise start out with a name that is already taken.
+        _modName = _app.Registry.MakeUniqueName(SuggestName(song.Song.Title));
+        RefreshNameConflict();
         IntroOptions = slot.HasIntro
             ? new[] { IntroStrategy.Real, IntroStrategy.Detached, IntroStrategy.FadeIn, IntroStrategy.Silence }
             : new[] { IntroStrategy.None };
@@ -129,6 +132,7 @@ public sealed class EditorViewModel : ObservableObject
         _plan = manifest.Plan.Clone();
         _userPickedIntro = true;
         _modName = manifest.Name;
+        RefreshNameConflict();   // an existing mod keeps its own name, so this clears any conflict
         RaiseAll();
     }
 
@@ -277,7 +281,7 @@ public sealed class EditorViewModel : ObservableObject
     public string ModName
     {
         get => _modName;
-        set { if (SetProperty(ref _modName, value)) { OnPropertyChanged(nameof(CanBuild)); OnPropertyChanged(nameof(Validation)); BuildCommand.RaiseCanExecuteChanged(); } }
+        set { if (SetProperty(ref _modName, value)) { RefreshNameConflict(); OnPropertyChanged(nameof(CanBuild)); OnPropertyChanged(nameof(Validation)); BuildCommand.RaiseCanExecuteChanged(); } }
     }
 
     private void PlanChanged()
@@ -356,6 +360,7 @@ public sealed class EditorViewModel : ObservableObject
             if (LoopRunsPastEnd) return $"The loop ends at {LoopEndSec:0.0} s but the song is {DurationSec:0.0} s long. Fewer bars or an earlier start.";
             if (IntroNeedsFabrication) return $"'Real' intro needs {_slot.IntroSeconds:0.0} s of material before the loop start; only {_plan.LoopStartSec:0.0} s exists. Switch to Detached, Fade in, or move the loop start later.";
             if (DetachedIntroRunsPastEnd) return $"The detached intro ends at {IntroEndSec:0.0} s but the song is {DurationSec:0.0} s long. Move the intro start earlier.";
+            if (_nameConflict is not null) return _nameConflict;
             if (StretchOverCap) return $"This plan stretches the song by {StretchPercent:0.0}%, beyond the {_app.Settings.StretchCap:P0} cap. It will build, but it will sound stretched.";
             if (string.IsNullOrWhiteSpace(_modName)) return "Give the mod a name.";
             return "";
@@ -363,7 +368,13 @@ public sealed class EditorViewModel : ObservableObject
     }
 
     public bool CanBuild => _slot is not null && _slot.Measured && !LoopRunsPastEnd && !IntroNeedsFabrication
-                            && !DetachedIntroRunsPastEnd && !string.IsNullOrWhiteSpace(_modName);
+                            && !DetachedIntroRunsPastEnd && !string.IsNullOrWhiteSpace(_modName) && _nameConflict is null;
+
+    /// <summary>Re-check the name against the other mods and the paks in ~mods. Only a new mod is
+    /// checked; an existing one is being edited under the name it already has. Done when the name
+    /// changes, not on every plan edit, because it reads the mods folder.</summary>
+    private void RefreshNameConflict()
+        => _nameConflict = IsExisting || string.IsNullOrWhiteSpace(_modName) ? null : _app.Registry.FindNameConflict(_modName);
     public bool IsBusy { get => _isBusy; private set { if (SetProperty(ref _isBusy, value)) { PreviewCommand.RaiseCanExecuteChanged(); PreviewTrackCommand.RaiseCanExecuteChanged(); PreviewIntroCommand.RaiseCanExecuteChanged(); BuildCommand.RaiseCanExecuteChanged(); SavePlanCommand.RaiseCanExecuteChanged(); } } }
     public string BusyText { get => _busyText; private set => SetProperty(ref _busyText, value); }
     public string PreviewInfo { get => _previewInfo; private set => SetProperty(ref _previewInfo, value); }
@@ -424,7 +435,7 @@ public sealed class EditorViewModel : ObservableObject
                 var (audio, secs) = TrackPreview.Assemble(b.Intro, b.Loop, slot.Loop.SampleRate, repeats: 3);
                 var limit = b.LimiterReductionDb > 0.05 ? $" · limiter −{b.LimiterReductionDb:0.0} dB" : "";
                 var trim = Math.Abs(b.GainDb) > 1e-9 ? $" · trim {b.GainDb:+0.0;-0.0} dB" : "";
-                return Write(audio, secs, cache, "preview",
+                return Write(audio, secs, cache, PreviewCache.Loop,
                     $"seam {b.SeamMetric:0.000} (lower is better) · {b.Lufs:0.0} LUFS · peak {b.PeakDbfs:0.0} dBFS{trim}{limit} · stretch via {stretcher.Name}",
                     AdviceFor(b.GainDb, b.LimiterReductionDb));
             });
@@ -465,7 +476,7 @@ public sealed class EditorViewModel : ObservableObject
                 double peak = intro.PeakDbfs();
                 // A Silence intro is genuinely empty; saying "peak -∞ dBFS" reads like a failure.
                 var level = double.IsNegativeInfinity(peak) ? "silent" : $"peak {peak:0.0} dBFS";
-                return Write(intro, secs, cache, "intro",
+                return Write(intro, secs, cache, PreviewCache.Intro,
                     $"intro only · {intro.Seconds:0.00} s · {where} · {level}{trim}",
                     AdviceFor(b.GainDb, b.LimiterReductionDb));
             });
@@ -530,7 +541,7 @@ public sealed class EditorViewModel : ObservableObject
                 var (audio, secs) = TrackPreview.Assemble(b.Intro, b.Loop, slot.Loop.SampleRate, repeats);
                 var limit = b.LimiterReductionDb > 0.05 ? $" · limiter −{b.LimiterReductionDb:0.0} dB" : "";
                 var trim = Math.Abs(b.GainDb) > 1e-9 ? $" · trim {b.GainDb:+0.0;-0.0} dB" : "";
-                return Write(audio, secs, cache, "track",
+                return Write(audio, secs, cache, PreviewCache.Track,
                     $"{b.Lufs:0.0} LUFS · peak {b.PeakDbfs:0.0} dBFS{trim}{limit} · seam {b.SeamMetric:0.000}",
                     AdviceFor(b.GainDb, b.LimiterReductionDb));
             });
@@ -548,8 +559,7 @@ public sealed class EditorViewModel : ObservableObject
     private static Rendered Write(PcmBuffer audio, IReadOnlyList<TrackSection> sections, string cache,
                                   string prefix, string info, string advice)
     {
-        Directory.CreateDirectory(cache);
-        var p = Path.Combine(cache, $"{prefix}_{Guid.NewGuid():N}.wav");
+        var p = PreviewCache.NewPath(cache, prefix);   // the one place that names these files, so exit cleanup finds them
         WavIo.WritePcm16(p, audio);
         return new Rendered(p, ComputePeaks(audio, WaveformColumns), sections, audio.Seconds, info, advice);
     }
@@ -650,7 +660,9 @@ public sealed class EditorViewModel : ObservableObject
     private void RecommendName()
     {
         if (_slot is null || _song is null) return;
-        ModName = NameSuggester.Suggest(_slot, _song.Song.Path, _app.Registry.All().Select(m => m.Name));
+        // Suggest() avoids names already in use; MakeUniqueName also catches ones that only collide after sanitising.
+        ModName = _app.Registry.MakeUniqueName(
+            NameSuggester.Suggest(_slot, _song.Song.Path, _app.Registry.All().Select(m => m.Name)));
     }
 
     private static string SuggestName(string title)

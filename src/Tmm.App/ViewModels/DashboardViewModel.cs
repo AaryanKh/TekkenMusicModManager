@@ -15,12 +15,18 @@ public sealed class ModRow : ObservableObject
 
     public string Name => Manifest.Name;
     public string SlotTitle => Manifest.SlotTitle;
-    public string SongFile => Path.GetFileName(Manifest.SongPath);
+    public bool IsImported => Manifest.Imported;
+    public string SongFile => Manifest.Imported ? "(imported)" : Path.GetFileName(Manifest.SongPath);
     public string SongPath => Manifest.SongPath;
-    public bool SongMissing => !File.Exists(Manifest.SongPath);
+    /// <summary>What to show after "source:". An imported mod has no song to point at.</summary>
+    public string SourceText => Manifest.Imported ? "imported from a metadata file, no source song" : Manifest.SongPath;
+    /// <summary>True for an imported mod too, which is what keeps play and art lookup off; the
+    /// "song is missing" warning is for mods that had a song and lost it (<see cref="ShowSongMissing"/>).</summary>
+    public bool SongMissing => Manifest.Imported || !File.Exists(Manifest.SongPath);
+    public bool ShowSongMissing => !Manifest.Imported && !File.Exists(Manifest.SongPath);
     public string LastBuilt => Manifest.Updated.ToLocalTime().ToString("g");
     public string WemIds => string.Join(", ", Manifest.WemIds);
-    public string PlanSummary => $"start {Manifest.Plan.LoopStartSec:0.00} s · {Manifest.Plan.LoopBars} bars · stretch {Math.Abs(Manifest.Plan.Rho - 1) * 100:0.0}% · intro {Manifest.Plan.IntroStrategy}" +
+    public string PlanSummary => Manifest.Imported ? "imported · the render settings are not part of the metadata" : $"start {Manifest.Plan.LoopStartSec:0.00} s · {Manifest.Plan.LoopBars} bars · stretch {Math.Abs(Manifest.Plan.Rho - 1) * 100:0.0}% · intro {Manifest.Plan.IntroStrategy}" +
                                  (Manifest.Plan.ManualOverrides.Count > 0 ? " · edited by hand" : "");
 
     /// <summary>Measured loudness of the last render plus any manual trim, so two mods can be
@@ -76,6 +82,8 @@ public sealed class ThirdPartyRow
     public required string File { get; init; }
     public required int Count { get; init; }
     public required string Ids { get; init; }
+    /// <summary>"Replaces: <track>" when the pak carries every WEM of a catalog slot, else empty.</summary>
+    public string Replaces { get; init; } = "";
 }
 
 /// <summary>
@@ -104,8 +112,8 @@ public sealed class DashboardViewModel : ObservableObject
         RefreshCommand = new RelayCommand(Refresh);
         EnableCommand = new AsyncRelayCommand(p => EnableAsync(p as ModRow), p => p is ModRow r && r.CanEnable && !IsBusy);
         DisableCommand = new AsyncRelayCommand(p => DisableAsync(p as ModRow), p => p is ModRow r && r.IsEnabled && !IsBusy);
-        RebuildCommand = new AsyncRelayCommand(p => RebuildAsync(p as ModRow), p => p is ModRow && !IsBusy);
-        EditCommand = new RelayCommand(p => { if (p is ModRow r) EditRequested?.Invoke(this, r.Manifest); }, p => p is ModRow && !IsBusy);
+        RebuildCommand = new AsyncRelayCommand(p => RebuildAsync(p as ModRow), p => p is ModRow r && !r.IsImported && !IsBusy);
+        EditCommand = new RelayCommand(p => { if (p is ModRow r) EditRequested?.Invoke(this, r.Manifest); }, p => p is ModRow r && !r.IsImported && !IsBusy);
         DeleteCommand = new AsyncRelayCommand(p => DeleteAsync(p as ModRow), p => p is ModRow && !IsBusy);
         RebuildStaleCommand = new AsyncRelayCommand(RebuildStaleAsync, () => !IsBusy && Rows.Any(r => r.State == ModState.Stale));
         ScanCommand = new RelayCommand(ScanThirdParty, () => !IsBusy);
@@ -312,6 +320,7 @@ public sealed class DashboardViewModel : ObservableObject
 
     /// <summary>What the player is playing: the song the mod was built from.</summary>
     public string PlayerTitle => _selectedRow is null ? ""
+        : _selectedRow.IsImported ? "Imported: there is no source song to play"
         : _selectedRow.SongMissing ? "Source song is missing" : _selectedRow.SongFile;
 
     private void OnPlayPause()
@@ -516,12 +525,19 @@ public sealed class DashboardViewModel : ObservableObject
     {
         // Renaming a pak by hand leaves the mod reading as Disabled and the file looking third-party.
         // Reclaim those first, so the third-party list below is genuinely other people's work.
-        string adopted = AdoptRenamed();
+        // Then paks that carry a metadata file, before the list: an imported pak is ours from then on.
+        string adopted = AdoptRenamed() + ImportRecognised();
 
         ThirdParty.Clear();
         var list = Conflicts.ScanThirdParty(_app.Registry, _app.Settings.GameModsDir);
+        IReadOnlyList<Slot> catalog = _app.Catalog.IsBuilt ? _app.Catalog.AllSlots() : Array.Empty<Slot>();
         foreach (var t in list)
-            ThirdParty.Add(new ThirdPartyRow { File = Path.GetFileName(t.Path), Count = t.WemIds.Count, Ids = string.Join(", ", t.WemIds.Take(6)) + (t.WemIds.Count > 6 ? "…" : "") });
+            ThirdParty.Add(new ThirdPartyRow
+            {
+                File = Path.GetFileName(t.Path), Count = t.WemIds.Count,
+                Ids = string.Join(", ", t.WemIds.Take(6)) + (t.WemIds.Count > 6 ? "…" : ""),
+                Replaces = ReplacedTracks.Describe(t.WemIds, catalog),
+            });
         ThirdPartyNote = !_app.Settings.GameRootLooksValid() ? "Game folder not set."
                        : list.Count == 0 ? "No third-party audio paks found in ~mods." + adopted
                        : $"{list.Count} third-party pak(s) in ~mods override jukebox audio. Their slots are flagged when you enable a mod." + adopted;
@@ -558,6 +574,40 @@ public sealed class DashboardViewModel : ObservableObject
         Refresh();
         ModsChanged?.Invoke(this, EventArgs.Empty);
         return $"  Adopted {log.Count} renamed pak(s).";
+    }
+
+    /// <summary>
+    /// Offer to adopt paks in ~mods that carry a metadata file but are not in the mod list: a new PC, a
+    /// cleared app folder, or a pak somebody sent. Returns a note for the scan line, empty when there
+    /// was nothing to do.
+    /// </summary>
+    private string ImportRecognised()
+    {
+        var found = ModImport.Find(_app.Registry, _app.Settings.GameModsDir);
+        if (found.Count == 0) return "";
+
+        var nl = Environment.NewLine;
+        var preview = string.Join(nl, found.Select(r =>
+            $"  {r.Meta.Name}{nl}      {(string.IsNullOrEmpty(r.Meta.SlotTitle) ? "slot " + r.Meta.SlotKey : r.Meta.SlotTitle)}" +
+            (string.IsNullOrEmpty(r.Meta.SongFile) ? "" : $"  ·  from {r.Meta.SongFile}")));
+        bool ok = _app.Dialogs.Confirm(
+            found.Count == 1 ? "A pak from this app was found" : $"{found.Count} paks from this app were found",
+            "These paks in ~mods carry a metadata file but are not in your mod list:" + nl + nl +
+            preview + nl + nl +
+            "Import them? Each pak is copied into the app's store, so you can enable, disable and delete it " +
+            "here. They cannot be edited or rebuilt, because the source song and settings are not in the " +
+            "metadata. Nothing in the game folder is changed.");
+        if (!ok) return $"  {found.Count} recognised pak(s) were left alone.";
+
+        try
+        {
+            var result = ModImport.Import(_app.Registry, found);
+            Refresh();
+            ModsChanged?.Invoke(this, EventArgs.Empty);
+            return $"  Imported {result.Imported} mod(s).";
+        }
+        catch (TmmException e) { _app.Dialogs.ShowError("Import failed", e.Message); return ""; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { _app.Dialogs.ShowError("Import failed", FileOps.Explain(e)); return ""; }
     }
 
     private async Task RunAsync(string what, Action work)

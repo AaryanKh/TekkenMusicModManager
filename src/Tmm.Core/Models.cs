@@ -225,4 +225,8 @@ public sealed class ModManifest
     /// <summary>Last measured render facts, for the dashboard. Informational only.</summary>
     public double? SeamMetric { get; set; }
     public double? Lufs { get; set; }
+    /// <summary>Adopted from a pak's metadata file rather than built here. The source song and render
+    /// plan are not part of the metadata, so <see cref="SongPath"/> is empty and the mod can be enabled,
+    /// disabled and deleted but not edited or rebuilt.</summary>
+    public bool Imported { get; set; }
 }

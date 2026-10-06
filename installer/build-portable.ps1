@@ -57,6 +57,7 @@ if ($LASTEXITCODE -ne 0) { throw "dotnet publish (cli) failed" }
 Copy-Item (Join-Path $PSScriptRoot "portable\portable.txt") $stage
 Copy-Item (Join-Path $PSScriptRoot "portable\README-portable.txt") $stage
 Copy-Item (Join-Path $PSScriptRoot "THIRD-PARTY-NOTICES.txt") $stage
+Copy-Item (Join-Path $PSScriptRoot "..\LICENSE") $stage
 Copy-Item (Join-Path $root "README.md") $stage
 New-Item -ItemType Directory -Force (Join-Path $stage "UserData") | Out-Null
 
@@ -68,7 +69,7 @@ foreach ($tool in @("ffmpeg", "UnrealPak")) {
     Copy-Item (Join-Path $PSScriptRoot "portable\tools\$tool\README.txt") $toolDir
 }
 
-foreach ($must in @("TekkenMusicModManager.exe", "tmm.exe", "data\jukebox_slots.csv", "data\stock_catalog.json", "portable.txt", "tools\ffmpeg", "tools\UnrealPak")) {
+foreach ($must in @("TekkenMusicModManager.exe", "tmm.exe", "data\jukebox_slots.csv", "data\stock_catalog.json", "data\jukebox_text\jukebox_text.json", "portable.txt", "tools\ffmpeg", "tools\UnrealPak")) {
     if (-not (Test-Path (Join-Path $stage $must))) { throw "portable stage is missing $must" }
 }
 

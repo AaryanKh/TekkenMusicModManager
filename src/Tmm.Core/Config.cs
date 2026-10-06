@@ -31,6 +31,9 @@ public static class Constants
     // on this before it was found. Do not "tidy" this path.
     public static readonly string PaksRelative = Path.Combine("Polaris", "Content", "Paks");
     public const string ModsDirName = "~mods";
+    /// <summary>Where the jukebox titles container goes: plain Paks\mods, not ~mods. Confirmed in game:
+    /// the titles only show from here. The audio paks stay in ~mods (see above).</summary>
+    public const string TitlesDirName = "mods";
     public static readonly string WemMediaRelative = Path.Combine("Polaris", "Content", "WwiseAudio", "Media");
     /// <summary>Path *inside* the pak, forward slashes, as UnrealPak wants it.</summary>
     public const string WemMediaPakPath = "Polaris/Content/WwiseAudio/Media";
@@ -75,7 +78,7 @@ public sealed class Settings
     public string? FfmpegPath { get; set; }
     /// <summary>Optional rubberband CLI. When absent the resampling fallback stretcher is used.</summary>
     public string? RubberBandPath { get; set; }
-    /// <summary>Folder of stock WEMs the user already extracted (FModel). Used by the catalog build.</summary>
+    /// <summary>Folder of stock WEMs exported by hand. The catalog build only uses it when the game folder is not set.</summary>
     public string? WemSourceFolder { get; set; }
     /// <summary>Loudness target for rendered loops. Null = leave the song's level alone.</summary>
     public double? TargetLufs { get; set; } = null;
@@ -87,6 +90,9 @@ public sealed class Settings
     /// the pak into ~mods, so the manager can recognise the pak later (see <c>ModMetadata</c>). Off by
     /// default: nothing extra is written unless asked for.</summary>
     public bool WriteModMetadata { get; set; } = false;
+    /// <summary>Show each enabled mod's song in the jukebox instead of the stock track name, through one
+    /// extra container in ~mods (see <c>Titles.JukeboxTitles</c>). English game text only.</summary>
+    public bool RenameJukeboxTitles { get; set; } = true;
 
     [JsonIgnore] public string CatalogPath => Path.Combine(AppDir, "catalog.json");
     /// <summary>Where we keep manifests + rendered WEMs + paks, independent of the game dir.</summary>
@@ -96,6 +102,9 @@ public sealed class Settings
     [JsonIgnore] public string SettingsPath => Path.Combine(AppDir, "settings.json");
     [JsonIgnore] public string? GameModsDir =>
         GameRoot is null ? null : Path.Combine(GameRoot, Constants.PaksRelative, Constants.ModsDirName);
+    /// <summary>Paks\mods, where the jukebox titles container is written.</summary>
+    [JsonIgnore] public string? GameTitlesDir =>
+        GameRoot is null ? null : Path.Combine(GameRoot, Constants.PaksRelative, Constants.TitlesDirName);
     [JsonIgnore] public string? GamePaksDir =>
         GameRoot is null ? null : Path.Combine(GameRoot, Constants.PaksRelative);
 

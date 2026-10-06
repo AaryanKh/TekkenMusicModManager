@@ -1,10 +1,8 @@
 namespace Tmm.Core.Catalog;
 
 /// <summary>
-/// Pull stock WEMs out of the user's own game install. Never shipped with the app.
-///
-/// Only the header is needed for measurement (~4 KB), but the pak is Oodle-compressed in 64 KB
-/// blocks, so the practical unit is "extract the file". ~886 files, done once.
+/// Stock WEMs as files on disk. The app reads the game's paks itself (<see cref="GameInstallWemSource"/>);
+/// this remains for a folder someone already exported, which is also how tests feed the builder.
 /// </summary>
 public interface IExtractor
 {
@@ -12,7 +10,7 @@ public interface IExtractor
     IReadOnlyDictionary<int, string> Extract(IEnumerable<int> wemIds, string dest, IProgress<(int done, int total, string what)>? progress = null);
 }
 
-/// <summary>For development and for users who already ran FModel by hand.</summary>
+/// <summary>A folder of WEMs exported by hand. Not needed any more for a normal rebuild.</summary>
 public sealed class PreExtractedFolderExtractor : IExtractor
 {
     public string Folder { get; }
@@ -33,7 +31,7 @@ public sealed class PreExtractedFolderExtractor : IExtractor
         if (!Directory.Exists(Folder))
             throw new ExtractionException($"WEM source folder not found: {Folder}");
 
-        // Index once: FModel exports may land in nested Media/ folders and may carry suffixes.
+        // Index once: exports may land in nested Media/ folders and may carry suffixes.
         var index = new Dictionary<int, string>();
         foreach (var f in Directory.EnumerateFiles(Folder, "*.wem", SearchOption.AllDirectories))
         {
@@ -56,22 +54,63 @@ public sealed class PreExtractedFolderExtractor : IExtractor
     }
 }
 
-/// <summary>Drives FModel's CLI. Needs Mappings.usmap for the UI but not for raw .wem export.</summary>
-public sealed class FModelCliExtractor : IExtractor
+/// <summary>The first bytes of a stock WEM and its full size: all that measuring a slot needs.</summary>
+public sealed record WemHead(byte[] Head, long Size, string Source);
+
+/// <summary>Supplies WEM headers without writing whole files anywhere.</summary>
+public interface IWemHeadSource
 {
-    public FModelCliExtractor(string fmodelExe, string gameRoot, string? usmap = null) { }
-    public IReadOnlyDictionary<int, string> Extract(IEnumerable<int> wemIds, string dest, IProgress<(int, int, string)>? progress = null)
-        => throw new NotImplementedException("FModel CLI extraction is not wired up yet; use a pre-extracted folder.");
+    /// <summary>{wem_id: header} for every id it can find; ids it cannot find are left out.</summary>
+    IReadOnlyDictionary<int, WemHead> ReadHeads(IEnumerable<int> wemIds, IProgress<(int done, int total, string what)>? progress = null);
 }
 
 /// <summary>
-/// Preferred long-term: reference the CUE4Parse NuGet package and read pakchunk0 directly (Oodle
-/// decompression needs oo2core on PATH). Removes the FModel install requirement. Kept as a contract
-/// until the PreExtractedFolder path proves limiting.
+/// Reads stock WEMs straight from the game's own .pak files: no FModel, no export folder. Every pak under
+/// Paks (not ~mods) that lists WwiseAudio/Media/&lt;id&gt;.wem is indexed; when two hold the same id, the
+/// one the engine would load wins (see <see cref="Pak.PakPriority"/>). That covers pakchunk0 for the base
+/// game and pakchunk0_0_P / pakchunk500(_0_P) for updates, Season 2 and collaborations. Only the first
+/// compressed block of each file is decompressed, which holds the header.
 /// </summary>
-public sealed class Cue4ParseExtractor : IExtractor
+public sealed class GameInstallWemSource : IWemHeadSource
 {
-    public Cue4ParseExtractor(string gameRoot) { }
-    public IReadOnlyDictionary<int, string> Extract(IEnumerable<int> wemIds, string dest, IProgress<(int, int, string)>? progress = null)
-        => throw new NotImplementedException("CUE4Parse extraction is not wired up yet; use a pre-extracted folder.");
+    private const int HeadBytes = 4096;
+    private readonly string _paksDir;
+
+    public GameInstallWemSource(string gamePaksDir) => _paksDir = gamePaksDir;
+
+    public IReadOnlyDictionary<int, WemHead> ReadHeads(IEnumerable<int> wemIds, IProgress<(int done, int total, string what)>? progress = null)
+    {
+        if (!Directory.Exists(_paksDir))
+            throw new ExtractionException($"game paks folder not found: {_paksDir}");
+
+        // Index every audio file in every real pak (the 339-byte stubs beside IoStore containers hold none).
+        var best = new Dictionary<int, (Pak.PakReader Pak, Pak.PakEntry Entry, int Rank)>();
+        var paks = Directory.EnumerateFiles(_paksDir, "*.pak", SearchOption.TopDirectoryOnly)
+                            .Where(f => new FileInfo(f).Length > 4096).ToList();
+        for (int i = 0; i < paks.Count; i++)
+        {
+            progress?.Report((i, paks.Count, $"Reading {Path.GetFileName(paks[i])}"));
+            Pak.PakReader pak;
+            try { pak = Pak.PakReader.Open(paks[i]); }
+            catch (PackException) { continue; }   // not a pak this reader handles; it holds no audio we use
+            int rank = Pak.PakPriority.Rank(paks[i]);
+            foreach (var (path, entry) in pak.Entries)
+            {
+                if (!path.StartsWith(Constants.WemMediaPakPath + "/", StringComparison.OrdinalIgnoreCase) ||
+                    !path.EndsWith(".wem", StringComparison.OrdinalIgnoreCase)) continue;
+                if (!int.TryParse(Path.GetFileNameWithoutExtension(path), out var id)) continue;
+                if (!best.TryGetValue(id, out var have) || rank > have.Rank) best[id] = (pak, entry, rank);
+            }
+        }
+
+        var ids = wemIds.ToList();
+        var result = new Dictionary<int, WemHead>();
+        for (int n = 0; n < ids.Count; n++)
+        {
+            if (!best.TryGetValue(ids[n], out var hit)) continue;
+            result[ids[n]] = new WemHead(hit.Pak.Read(hit.Entry, HeadBytes), hit.Entry.UncompressedSize, Path.GetFileName(hit.Pak.FilePath));
+            progress?.Report((n + 1, ids.Count, $"{ids[n]}.wem"));
+        }
+        return result;
+    }
 }

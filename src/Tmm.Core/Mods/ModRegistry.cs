@@ -65,6 +65,8 @@ public sealed class ModRegistry
     public string? FindNameConflict(string modName)
     {
         var pakName = PakLayout.PakFilename(PakLayout.SanitizeModName(modName));
+        if (Titles.JukeboxTitles.IsTitlesFile(pakName))
+            return $"'{pakName}' is reserved for the jukebox titles this app writes. Choose a different name.";
 
         var owner = All().FirstOrDefault(m => SamePak(m.PakName, pakName));
         if (owner is not null)

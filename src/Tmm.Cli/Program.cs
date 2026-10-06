@@ -7,16 +7,18 @@ using Tmm.Core.Mods;
 using Tmm.Core.Pak;
 using Tmm.Core.Render;
 using Tmm.Core.Steam;
+using Tmm.Core.Titles;
 using Tmm.Core.Wem;
 
 // Phase-1 command line. Exercises the full pipeline without the UI so the core can be validated
 // in-game before a single widget exists.
 //
-//   tmm catalog build --sheet data/jukebox_slots.csv --wems <folder>
+//   tmm catalog build [--sheet data/jukebox_slots.csv] [--wems <export folder>]
 //   tmm catalog status
 //   tmm analyze <song> [--top 20] [--cap 0.06]
-//   tmm build <song> --slot <loop_id> --name MySong [--bars N] [--start S] [--gain dB] [--intro-start S] [--metadata] [--no-pack]
+//   tmm build <song> --slot <loop_id> --name MySong [--title "Song / Artist"] [--bars N] [--start S] [--gain dB] [--intro-start S] [--metadata] [--no-pack]
 //   tmm mods list | scan [--adopt] [--import] | enable <id> | disable <id> | rebuild <id> | delete <id>
+//   tmm titles status | sync | set <id> [title]
 //   tmm wem dump <file.wem>
 //   tmm find-game
 //   (global) --app-dir <dir>
@@ -41,6 +43,7 @@ static class Cli
                 "analyze" => Analyze(args.Skip(1).ToList(), settings),
                 "build" => Build(args.Skip(1).ToList(), settings),
                 "mods" => Mods(args.Skip(1).ToList(), settings),
+                "titles" => Titles(args.Skip(1).ToList(), settings),
                 "wem" => Wem(args.Skip(1).ToList()),
                 "find-game" => FindGame(),
                 _ => Fail($"unknown command '{args[0]}'"),
@@ -59,11 +62,12 @@ static class Cli
     }
 
     static void Usage() => Console.WriteLine(
-        "tmm catalog build --sheet <csv> --wems <folder> [--strict]\n" +
+        "tmm catalog build [--sheet <csv>] [--wems <export folder> [--strict]]\n" +
         "tmm catalog status\n" +
         "tmm analyze <song> [--top N] [--cap 0.06]\n" +
-        "tmm build <song> --slot <loop_id> [--name <name>] [--bars N] [--start S] [--gain dB] [--intro-start S] [--metadata] [--no-pack]\n" +
+        "tmm build <song> --slot <loop_id> [--name <name>] [--title <jukebox title>] [--bars N] [--start S] [--gain dB] [--intro-start S] [--metadata] [--no-pack]\n" +
         "tmm mods list | scan [--adopt] [--import] | enable <id> | disable <id> | rebuild <id> | delete <id>\n" +
+        "tmm titles status | sync | set <id> [title]\n" +
         "tmm wem dump <file.wem>\n" +
         "tmm find-game\n" +
         "global: --app-dir <dir>");
@@ -107,15 +111,29 @@ static class Cli
         }
         if (args.Count == 0 || args[0] != "build") return Fail("catalog build|status");
         var sheet = SheetPath(Take(args, "--sheet"));
-        var wems = Take(args, "--wems") ?? s.WemSourceFolder ?? throw new TmmException("--wems <folder of extracted stock .wem files> is required");
+        // Default: read the stock WEMs straight from the game's paks. --wems keeps the old route for a
+        // folder someone already exported.
+        var wems = Take(args, "--wems");
         bool strict = Flag(args, "--strict");
         var progress = new Progress<(int done, int total, string what)>(p => Console.Write($"\r  {p.done}/{p.total} {p.what,-60}"));
-        var r = CatalogBuilder.Build(sheet, new PreExtractedFolderExtractor(wems, allowMissing: !strict), s.ScratchDir, store, progress);
+        CatalogBuildResult r;
+        string from;
+        if (wems is not null)
+        {
+            r = CatalogBuilder.Build(sheet, new PreExtractedFolderExtractor(wems, allowMissing: !strict), s.ScratchDir, store, progress);
+            from = wems;
+        }
+        else
+        {
+            if (!s.GameRootLooksValid())
+                throw new GameNotFoundException("set the game folder (Settings, or GameRoot in settings.json), or pass --wems <export folder>");
+            r = CatalogBuilder.Build(sheet, new GameInstallWemSource(s.GamePaksDir!), store, progress);
+            from = "the game's paks";
+        }
         Console.WriteLine($"\ncatalog built: {r.Measured} of {r.Total} slots -> {store.Path}");
         if (r.Skipped.Count > 0)
         {
-            Console.WriteLine($"{r.Skipped.Count} slot(s) skipped — their stock WEMs are not in {wems}.");
-            Console.WriteLine("Season 2 and collab tracks live outside pakchunk0; export those chunks too and re-run to add them.");
+            Console.WriteLine($"{r.Skipped.Count} slot(s) skipped — their stock WEMs are not in {from}.");
             foreach (var id in r.Skipped) Console.WriteLine($"  #{id.No,-4} {id.Title}");
         }
         return 0;
@@ -151,6 +169,7 @@ static class Cli
     {
         int slotKey = int.Parse(Take(args, "--slot") ?? throw new TmmException("--slot <loop_id> is required"));
         string? name = Take(args, "--name");   // optional: suggested from the slot and filename below
+        string? title = Take(args, "--title");  // optional: suggested from the song's tags when the titles are written
         int? bars = Take(args, "--bars") is string b ? int.Parse(b) : null;
         double? start = Take(args, "--start") is string st ? double.Parse(st, CultureInfo.InvariantCulture) : null;
         bool noPack = Flag(args, "--no-pack");
@@ -220,7 +239,7 @@ static class Cli
         }
         var reg = new ModRegistry(s);
         var builder = new ModBuilder(reg, stretcher, PackerFactory.FromSettings(s));
-        var m = builder.Build(name, songPath, analyzed.Pcm, slot, plan, new Progress<(int, int, string)>(p => Console.Error.WriteLine($"  {p.Item3}")));
+        var m = builder.Build(name, songPath, analyzed.Pcm, slot, plan, new Progress<(int, int, string)>(p => Console.Error.WriteLine($"  {p.Item3}")), title);
         Console.WriteLine($"built mod {m.ModId} ({m.Name}) -> {reg.StorePak(m)}. Enable with: tmm mods enable {m.ModId}");
         if (s.WriteModMetadata) Console.WriteLine($"metadata: {ModMetadata.PathFor(reg.StorePak(m))}");
         return 0;
@@ -289,9 +308,15 @@ static class Cli
         var mod = reg.Get(args[1]);
         switch (args[0])
         {
-            case "enable": Installer.Enable(mod, reg, force: Flag(args, "--force")); Console.WriteLine($"enabled -> {reg.InstalledPak(mod)}"); return 0;
-            case "disable": Installer.Disable(mod, reg); Console.WriteLine("disabled"); return 0;
-            case "delete": Installer.Delete(mod, reg); Console.WriteLine("deleted"); return 0;
+            case "enable":
+            {
+                var titles = Installer.Enable(mod, reg, force: Flag(args, "--force"));
+                Console.WriteLine($"enabled -> {reg.InstalledPak(mod)}");
+                PrintTitles(titles);
+                return 0;
+            }
+            case "disable": { var titles = Installer.Disable(mod, reg); Console.WriteLine("disabled"); PrintTitles(titles); return 0; }
+            case "delete": { var titles = Installer.Delete(mod, reg); Console.WriteLine("deleted"); PrintTitles(titles); return 0; }
             case "rebuild":
             {
                 var slot = new CatalogStore(s.CatalogPath).Get(mod.SlotKey) ?? throw new CatalogNotBuiltException($"slot {mod.SlotKey} not in catalog");
@@ -302,6 +327,53 @@ static class Cli
             }
             default: return Fail($"unknown mods verb '{args[0]}'");
         }
+    }
+
+    static int Titles(List<string> args, Settings s)
+    {
+        var reg = new ModRegistry(s);
+        var verb = args.Count > 0 ? args[0] : "status";
+        switch (verb)
+        {
+            case "status":
+            {
+                var b = JukeboxTextBaseline.Load(s);   // throws, saying why, when the table cannot be read
+                Console.WriteLine($"title table: {b.PackagePath} from {b.Source} ({b.Culture}, {b.SlotKeys.Count} slots mapped)");
+                Console.WriteLine($"renaming:    {(s.RenameJukeboxTitles ? "on" : "off (Settings)")}");
+                var utoc = s.GameTitlesDir is null ? null : Path.Combine(s.GameTitlesDir, JukeboxTitles.PakStem + ".utoc");
+                Console.WriteLine($"titles pak:  {(utoc is not null && File.Exists(utoc) ? Path.ChangeExtension(utoc, ".pak") : "not installed")}");
+                foreach (var m in reg.All().Where(reg.IsEnabled))
+                {
+                    var max = JukeboxTitles.MaxBytesFor(b, m.SlotKey);
+                    var shown = max is not int room ? "keeps its stock title (not in the table)"
+                        : m.JukeboxTitle is null ? "(from the song's tags on the next sync)"
+                        : $"\"{JukeboxTitles.Fit(m.JukeboxTitle, room)}\"  [room for {room} bytes]";
+                    Console.WriteLine($"  {m.ModId}  {m.Name,-24} {shown}");
+                }
+                return 0;
+            }
+            case "sync":
+                PrintTitles(JukeboxTitles.Sync(reg));
+                return 0;
+            case "set":
+            {
+                if (args.Count < 2) return Fail("titles set <mod_id> [title]   (no title: go back to the song's tags)");
+                var mod = reg.Get(args[1]);
+                var title = JukeboxTitles.Clean(string.Join(' ', args.Skip(2)));
+                mod.JukeboxTitle = title.Length == 0 ? null : title;
+                reg.Save(mod);
+                PrintTitles(JukeboxTitles.Sync(reg));
+                return 0;
+            }
+            default: return Fail("titles status|sync|set");
+        }
+    }
+
+    static void PrintTitles(TitleSyncResult r)
+    {
+        Console.WriteLine($"titles: {r.Message}");
+        foreach (var a in r.Applied) Console.WriteLine($"  {a.ModName}: \"{a.Original}\" -> \"{a.Title}\"");
+        foreach (var w in r.Warnings) Console.WriteLine($"  warning: {w}");
     }
 
     static int Wem(List<string> args)

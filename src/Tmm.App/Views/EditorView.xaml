@@ -228,6 +228,10 @@
                         </DockPanel>
                         <TextBlock Style="{StaticResource Muted}" FontSize="11" Margin="0,4,0,0"
                                    Text="Becomes &lt;name&gt;_P.pak. Building renders both WEMs sample-exact, packs them, and stores the mod; enabling is a separate step on the dashboard so conflicts are checked in one place."/>
+                        <TextBlock Text="Jukebox title" Style="{StaticResource Label}" Margin="0,12,0,0"/>
+                        <TextBox Text="{Binding JukeboxTitle, UpdateSourceTrigger=PropertyChanged}" Width="540" HorizontalAlignment="Left"
+                                 ToolTip="What the jukebox lists for this slot while the mod is enabled, in place of the stock track name."/>
+                        <TextBlock Text="{Binding JukeboxTitleNote}" Style="{StaticResource Muted}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="540" HorizontalAlignment="Left"/>
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Bottom" Margin="12,0,0,0">
                         <Button Content="Save plan only" Command="{Binding SavePlanCommand}" Margin="0,0,8,0" Visibility="{Binding IsExisting, Converter={StaticResource Vis}}"/>

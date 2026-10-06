@@ -6,6 +6,7 @@ using Tmm.Core.Audio;
 using Tmm.Core.LoopFit;
 using Tmm.Core.Mods;
 using Tmm.Core.Render;
+using Tmm.Core.Titles;
 
 namespace Tmm.App.ViewModels;
 
@@ -32,6 +33,10 @@ public sealed class EditorViewModel : ObservableObject
     private bool _userPickedIntro;
     private string _modName = "";
     private string? _nameConflict;
+    private string _jukeboxTitle = "";
+    private int? _titleRoom;          // bytes the slot's jukebox entry holds; null when the slot cannot be renamed
+    private string _titleProblem = "";
+    private int _titleLoad;           // ignores a slower, older title lookup that finishes after a newer one
     private bool _isBusy;
     private string _busyText = "";
     private string _previewInfo = "";
@@ -101,6 +106,7 @@ public sealed class EditorViewModel : ObservableObject
         // A second mod from the same song would otherwise start out with a name that is already taken.
         _modName = _app.Registry.MakeUniqueName(SuggestName(song.Song.Title));
         RefreshNameConflict();
+        _ = LoadJukeboxTitleAsync(song.Song.Path, slot.Key, null);
         IntroOptions = slot.HasIntro
             ? new[] { IntroStrategy.Real, IntroStrategy.Detached, IntroStrategy.FadeIn, IntroStrategy.Silence }
             : new[] { IntroStrategy.None };
@@ -133,6 +139,7 @@ public sealed class EditorViewModel : ObservableObject
         _userPickedIntro = true;
         _modName = manifest.Name;
         RefreshNameConflict();   // an existing mod keeps its own name, so this clears any conflict
+        _ = LoadJukeboxTitleAsync(song.Song.Path, slot.Key, manifest.JukeboxTitle);
         RaiseAll();
     }
 
@@ -277,6 +284,61 @@ public sealed class EditorViewModel : ObservableObject
         get => _plan.TargetLufs ?? (_app.Settings.TargetLufs ?? -16.0);
         set { double v = Math.Clamp(value, -30, -6); if (_plan.TargetLufs is double cur && Math.Abs(cur - v) < 1e-9) return; if (_plan.TargetLufs is not null) { _plan.TargetLufs = v; PlanChanged(); } }
     }
+
+    // ------------------------------------------------------------------ jukebox title
+
+    /// <summary>What the jukebox shows for the slot while this mod is enabled. Starts as "Title / Artist"
+    /// from the song's tags; empty means "work it out from the tags".</summary>
+    public string JukeboxTitle
+    {
+        get => _jukeboxTitle;
+        set { if (SetProperty(ref _jukeboxTitle, value)) OnPropertyChanged(nameof(JukeboxTitleNote)); }
+    }
+
+    /// <summary>Whether the title fits the slot, and what the jukebox will actually show if it does not.</summary>
+    public string JukeboxTitleNote
+    {
+        get
+        {
+            if (_slot is null) return "";
+            if (!_app.Settings.RenameJukeboxTitles) return "Jukebox titles are switched off in Settings, so the slot keeps its stock name.";
+            if (_titleProblem.Length > 0) return $"The game's title list could not be read ({_titleProblem}), so the slot keeps its stock name.";
+            if (_titleRoom is not int room) return "This slot's name lives in a Season 2 list the app cannot change, so it keeps its stock name.";
+            var clean = JukeboxTitles.Clean(_jukeboxTitle);
+            if (clean.Length == 0) return "Empty: the song's own title and artist will be used.";
+            int used = System.Text.Encoding.UTF8.GetByteCount(clean);
+            string unit = used == clean.Length ? "characters" : "bytes (letters outside English take 2 or 3 each)";
+            return used <= room
+                ? $"Fits: {used} of {room} {unit}. Shown in the jukebox while this mod is enabled."
+                : $"{used - room} {unit} too long for this slot ({room} max). The jukebox will show \"{JukeboxTitles.Fit(clean, room)}\".";
+        }
+    }
+
+    private async Task LoadJukeboxTitleAsync(string songPath, int slotKey, string? existing)
+    {
+        int generation = ++_titleLoad;
+        var settings = _app.Settings;
+        var (room, problem, title) = await Task.Run(() =>
+        {
+            int? r = null;
+            string p = "";
+            try { r = JukeboxTitles.MaxBytesFor(JukeboxTextBaseline.Load(settings), slotKey); }
+            catch (Exception e) when (e is TmmException or IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+            {
+                p = e.Message;
+            }
+            var t = existing ?? JukeboxTitles.Suggest(SongTagReader.Read(songPath, settings.FfmpegExe), songPath, r ?? int.MaxValue);
+            return (r, p, t);
+        });
+        if (generation != _titleLoad) return;
+        _titleRoom = room;
+        _titleProblem = problem;
+        _jukeboxTitle = title;
+        OnPropertyChanged(nameof(JukeboxTitle));
+        OnPropertyChanged(nameof(JukeboxTitleNote));
+    }
+
+    private string? CleanTitle() { var t = JukeboxTitles.Clean(_jukeboxTitle); return t.Length == 0 ? null : t; }
 
     public string ModName
     {
@@ -627,6 +689,7 @@ public sealed class EditorViewModel : ObservableObject
         try
         {
             var name = _modName; var songPath = _song.Song.Path; var pcm = _song.Pcm; var slot = _slot; var plan = _plan.Clone();
+            var title = CleanTitle();
             var builder = _app.Builder();
             ModManifest m;
             if (_existing is not null)
@@ -634,12 +697,13 @@ public sealed class EditorViewModel : ObservableObject
                 var existing = _existing;
                 m = await Task.Run(() =>
                 {
+                    existing.JukeboxTitle = title;   // saved with the plan; the titles follow when the rebuild re-enables
                     _app.Registry.UpdatePlan(existing, plan);
                     return builder.Rebuild(existing, slot, _app.Settings.FfmpegExe, progress);
                 });
             }
             else
-                m = await Task.Run(() => builder.Build(name, songPath, pcm, slot, plan, progress));
+                m = await Task.Run(() => builder.Build(name, songPath, pcm, slot, plan, progress, title));
             Built?.Invoke(this, m);
         }
         catch (TmmException e) { _app.Dialogs.ShowError("Build failed", e.Message); }
@@ -650,7 +714,10 @@ public sealed class EditorViewModel : ObservableObject
     private void SavePlan()
     {
         if (_existing is null) return;
+        _existing.JukeboxTitle = CleanTitle();
         _app.Registry.UpdatePlan(_existing, _plan);
+        // A new title shows up straight away for an enabled mod; it does not need a rebuild.
+        if (_app.Registry.IsEnabled(_existing)) JukeboxTitles.Sync(_app.Registry);
         PlanSaved?.Invoke(this, _existing);
     }
 

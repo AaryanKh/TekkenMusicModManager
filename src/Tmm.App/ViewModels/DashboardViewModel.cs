@@ -100,6 +100,7 @@ public sealed class DashboardViewModel : ObservableObject
     private string _gameStatus = "";
     private bool _gameOk;
     private string _thirdPartyNote = "";
+    private string _titlesNote = "";
     private string _setupStatus = "";
     private bool _setupOk;
     private bool _showTiles;
@@ -161,6 +162,12 @@ public sealed class DashboardViewModel : ObservableObject
     public string GameStatus { get => _gameStatus; private set => SetProperty(ref _gameStatus, value); }
     public bool GameOk { get => _gameOk; private set => SetProperty(ref _gameOk, value); }
     public string ThirdPartyNote { get => _thirdPartyNote; private set => SetProperty(ref _thirdPartyNote, value); }
+    /// <summary>What the last enable/disable/delete did to the jukebox titles, when it is worth saying.</summary>
+    public string TitlesNote { get => _titlesNote; private set => SetProperty(ref _titlesNote, value); }
+
+    private void Note(Core.Titles.TitleSyncResult r) =>
+        TitlesNote = r.Outcome is Core.Titles.TitleSyncOutcome.Off ? ""
+            : string.Join("\n", new[] { r.Message }.Concat(r.Warnings));
     /// <summary>Game folder + ffmpeg + packer + catalog, in one line. Drives the "Settings" nudge.</summary>
     public string SetupStatus { get => _setupStatus; private set => SetProperty(ref _setupStatus, value); }
     public bool SetupOk { get => _setupOk; private set => SetProperty(ref _setupOk, value); }
@@ -470,12 +477,12 @@ public sealed class DashboardViewModel : ObservableObject
         if (row is null) return;
         await RunAsync($"Enabling {row.Name}…", () =>
         {
-            try { Installer.Enable(row.Manifest, _app.Registry); }
+            try { Note(Installer.Enable(row.Manifest, _app.Registry)); }
             catch (SlotConflictException e)
             {
                 var msg = e.Message + "\n\nEnable anyway? Unreal will pick one of them by mount order and the other silently loses.";
                 if (ConfirmOnUi("Slot conflict", msg))
-                    Installer.Enable(row.Manifest, _app.Registry, force: true);
+                    Note(Installer.Enable(row.Manifest, _app.Registry, force: true));
             }
         });
     }
@@ -496,7 +503,7 @@ public sealed class DashboardViewModel : ObservableObject
     private Progress<(int done, int total, string what)>? _progress;
 
     private Task DisableAsync(ModRow? row) => row is null ? Task.CompletedTask
-        : RunAsync($"Disabling {row.Name}…", () => Installer.Disable(row.Manifest, _app.Registry));
+        : RunAsync($"Disabling {row.Name}…", () => Note(Installer.Disable(row.Manifest, _app.Registry)));
 
     private Task RebuildAsync(ModRow? row) => row is null ? Task.CompletedTask
         : RunAsync($"Rebuilding {row.Name}…", () => RebuildOne(row.Manifest));
@@ -504,7 +511,7 @@ public sealed class DashboardViewModel : ObservableObject
     private void RebuildOne(ModManifest m)
     {
         var slot = _app.Catalog.Get(m.SlotKey)
-                   ?? throw new CatalogNotBuiltException($"slot {m.SlotKey} ({m.SlotTitle}) is not in the catalog. Season 2 and collaboration tracks are not in the shipped catalog because they live outside pakchunk0 — export those paks and rebuild the catalog in Settings to add them.");
+                   ?? throw new CatalogNotBuiltException($"slot {m.SlotKey} ({m.SlotTitle}) is not in the catalog. Season 2 and collaboration tracks are not in the shipped catalog — rebuild the catalog in Settings to add them; it reads them from the game.");
         _app.Builder().Rebuild(m, slot, _app.Settings.FfmpegExe, _progress);
     }
 
@@ -518,7 +525,7 @@ public sealed class DashboardViewModel : ObservableObject
         if (row is null) return;
         if (!_app.Dialogs.Confirm("Delete mod", $"Delete '{row.Name}'? This removes it from ~mods and from the app store. The original song file is not touched."))
             return;
-        await RunAsync($"Deleting {row.Name}…", () => Installer.Delete(row.Manifest, _app.Registry));
+        await RunAsync($"Deleting {row.Name}…", () => Note(Installer.Delete(row.Manifest, _app.Registry)));
     }
 
     private void ScanThirdParty()

@@ -229,4 +229,7 @@ public sealed class ModManifest
     /// plan are not part of the metadata, so <see cref="SongPath"/> is empty and the mod can be enabled,
     /// disabled and deleted but not edited or rebuilt.</summary>
     public bool Imported { get; set; }
+    /// <summary>What the jukebox shows for the slot while this mod is enabled. Null until worked out from
+    /// the song's tags; shortened to fit the slot when the titles container is written.</summary>
+    public string? JukeboxTitle { get; set; }
 }

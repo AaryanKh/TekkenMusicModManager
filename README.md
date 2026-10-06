@@ -46,7 +46,7 @@ whichever tutorial you followed. Put the whole bundle into `tools\UnrealPak\` an
 | | |
 |---|---|
 | **TEKKEN 8 folder** | Found automatically through Steam. Settings → **Auto-detect (Steam)** if it guesses wrong. |
-| **Slot list** | All the jukebox slots ship with the app. Nothing to extract, and **FModel is not required**. |
+| **Slot list** | All the jukebox slots ship with the app. Nothing to extract, and **FModel is not required** for anything: when the app needs the game's own files, it reads them itself. |
 | **.NET** | Built into the exe. |
 
 Optional: if you have `rubberband.exe`, point Settings at it for pitch-preserving stretching. Without
@@ -77,6 +77,15 @@ Not set up yet: ffmpeg, UnrealPak.exe — see Settings.
 4. **Build.** Both audio files are rendered to the exact length the game expects, packed, and saved.
 5. **Enable** from the Dashboard. That copies the mod into the game's `~mods` folder. Disable removes
    it again and keeps the mod here, so you can switch it back on any time.
+
+**The jukebox shows your song's name.** While a mod is enabled, the jukebox lists its slot under the
+name in the editor's **Jukebox title** box instead of the stock track name. It starts as "Title / Artist"
+from the song's tags, and you can change it. A name has to fit in the space of the one it replaces (the
+editor tells you how much room there is), so a longer one is shortened with "…". All the renamed slots
+share one extra pak, `TMM_JukeboxTitles_P`, which goes in `Polaris\Content\Paks\mods` rather than
+`~mods` (the titles only show from there). The app rewrites it whenever you enable, disable, rebuild or
+delete a mod, and removes it when none needs it. Season 2 slots keep their stock names, and only the
+English game text is changed. Turn it off in **Settings → Built mods**.
 
 If two enabled mods would replace the same music, you are told before anything is installed. Mods other
 people made that are already in `~mods` are checked too.
@@ -147,17 +156,18 @@ will tell you so.
 
 ## Questions you might have
 
-**Is this safe for my game?** Mods are copied into `Polaris\Content\Paks\~mods` and nothing else is
-touched. Disabling a mod deletes that one file. Removing the whole folder puts the game back exactly as
-it was.
+**Is this safe for my game?** Mods are copied into `Polaris\Content\Paks\~mods`, and the jukebox titles
+pak into `Polaris\Content\Paks\mods`; nothing else is touched. Disabling a mod deletes its file. Removing
+those two folders puts the game back exactly as it was.
 
 **Will it break when the game updates?** Usually not. If a patch changes the length of a track you have
-replaced, rebuild that mod. Settings can re-measure the slot list from your own game files, but you only
-need that in this situation.
+replaced, rebuild that mod. **Settings → Rebuild catalog from the game** re-measures the slot list
+straight from your game files, but you only need that in this situation. Jukebox titles follow an update
+on their own: the title list is read from the game each time it is written.
 
-**Which tracks can I replace?** Almost all of them. The Season 2 and collaboration tracks are the
-exception: they live outside the game's base files and are not in the list that ships, so you would need
-to re-measure the slot list in Settings to use those slots.
+**Which tracks can I replace?** All of them. The Season 2 and collaboration tracks are not in the list
+that ships with the app; **Settings → Rebuild catalog from the game** adds them in a few seconds, with
+nothing to export first.
 
 **Can I rename my mods?** Yes. Rename the `.pak` in `~mods` however you like, then press **Scan ~mods**
 on the Dashboard and the app will recognise it and update itself to match.
@@ -199,8 +209,10 @@ arguments for the full list.
 
 ```
 tmm analyze <song>                                  rank every slot for a song
-tmm build <song> --slot <id> [--name <name>] [--metadata]   build a mod (--metadata also writes the .tmm.json)
+tmm build <song> --slot <id> [--name <name>] [--title <jukebox title>] [--metadata]   build a mod (--metadata also writes the .tmm.json)
 tmm mods list | scan [--adopt] [--import] | enable <id> | disable <id> | rebuild <id> | delete <id>
+tmm titles status | sync | set <id> [title]         jukebox titles: what is shown, rewrite them, rename one mod
+tmm catalog build [--wems <folder>]                 re-measure the slot list from the game (or an export folder)
 tmm find-game                                       locate the TEKKEN 8 install
 ```
 
@@ -220,6 +232,8 @@ dotnet run --project src/Tmm.App
 `installer\build-wix.ps1` produce setup executables instead.
 
 The engine (`src/Tmm.Core`) has no dependencies outside .NET itself; only the interface needs Windows.
+It reads the game's pak and IoStore files directly, including their Oodle Kraken compression, through a
+C# port of [ooz](https://github.com/powzix/ooz) (`src/Tmm.Core/Pak/Kraken.cs`).
 
 ---
 
@@ -229,7 +243,9 @@ The engine (`src/Tmm.Core`) has no dependencies outside .NET itself; only the in
   so and points you at the manual editor.
 - Without `rubberband.exe`, stretching shifts pitch.
 - The volume control protects against distortion but will not make an already-loud song much louder.
-- Season 2 and collaboration slots need the slot list re-measured from your own game files.
+- Season 2 and collaboration slots need the slot list rebuilt once (Settings), and keep their stock
+  jukebox names.
+- Jukebox titles are written for the English game text only, and must fit the length of the stock title.
 
 ---
 
@@ -238,5 +254,14 @@ The engine (`src/Tmm.Core`) has no dependencies outside .NET itself; only the in
 Built on the community's TEKKEN 8 audio modding work: the jukebox slot spreadsheet, and the UnrealPak
 build the tutorials pass around.
 
+The Kraken decompressor is a port of ooz by Powzix.
+
 TEKKEN is a trademark of Bandai Namco Entertainment. This is an unofficial fan tool, not affiliated with
 or endorsed by them. No game files or artwork are distributed with it.
+
+---
+
+## Licence
+
+GNU General Public License, version 3 or later. See [LICENSE](LICENSE). The app includes a port of the
+GPL-licensed ooz decompressor, which is what lets it read the game's files without other tools.

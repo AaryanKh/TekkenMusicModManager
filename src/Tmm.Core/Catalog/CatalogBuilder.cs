@@ -18,31 +18,60 @@ public static class CatalogBuilder
                                            CancellationToken ct = default)
     {
         var identities = SheetLoader.Load(sheetCsv);
-        var ids = new SortedSet<int>(identities.Select(i => i.LoopId));
-        foreach (var i in identities) if (i.IntroId is int iid) ids.Add(iid);
-
         Directory.CreateDirectory(scratch);
-        var paths = extractor.Extract(ids, scratch, progress);
+        var paths = extractor.Extract(WemIdsOf(identities), scratch, progress);
+        return MeasureAll(identities, id => paths.TryGetValue(id, out var p) ? Wem.WemReader.ReadHeader(p, id) : null,
+                          store, progress, ct, "WEM not exported", "in the export folder");
+    }
 
+    /// <summary>Build from the game install itself: <see cref="GameInstallWemSource"/> reads the headers out
+    /// of the game's paks, so nothing has to be exported first.</summary>
+    public static CatalogBuildResult Build(string sheetCsv, IWemHeadSource source, CatalogStore store,
+                                           IProgress<(int done, int total, string what)>? progress = null,
+                                           CancellationToken ct = default)
+    {
+        var identities = SheetLoader.Load(sheetCsv);
+        var heads = source.ReadHeads(WemIdsOf(identities), progress);
+        return MeasureAll(identities, id => heads.TryGetValue(id, out var h) ? Wem.WemReader.ReadHeader(h.Head, h.Size, id, $"{id}.wem") : null,
+                          store, progress, ct, "WEM not in the game files", "in the game's paks");
+    }
+
+    private static SortedSet<int> WemIdsOf(IEnumerable<SlotIdentity> identities)
+    {
+        var ids = new SortedSet<int>();
+        foreach (var i in identities)
+        {
+            ids.Add(i.LoopId);
+            if (i.IntroId is int iid) ids.Add(iid);
+        }
+        return ids;
+    }
+
+    private static CatalogBuildResult MeasureAll(List<SlotIdentity> identities, Func<int, WemInfo?> header, CatalogStore store,
+                                                 IProgress<(int done, int total, string what)>? progress, CancellationToken ct,
+                                                 string skippedNote, string where)
+    {
         var slots = new List<Slot>(identities.Count);
         var skipped = new List<SlotIdentity>();
         for (int n = 0; n < identities.Count; n++)
         {
             ct.ThrowIfCancellationRequested();
             var ident = identities[n];
-            // A slot is measurable only if every WEM it names was extracted. Half a slot is useless:
+            // A slot is measurable only if every WEM it names was found. Half a slot is useless:
             // the renderer needs both frame counts to hit the exact-length gate.
-            if (!paths.ContainsKey(ident.LoopId) || (ident.IntroId is int iid && !paths.ContainsKey(iid)))
+            var loop = header(ident.LoopId);
+            WemInfo? intro = ident.IntroId is int iid ? header(iid) : null;
+            if (loop is null || (ident.IntroId is not null && intro is null))
             {
                 skipped.Add(ident);
-                progress?.Report((n + 1, identities.Count, $"{ident.Title} (skipped, WEM not exported)"));
+                progress?.Report((n + 1, identities.Count, $"{ident.Title} (skipped, {skippedNote})"));
                 continue;
             }
-            slots.Add(Measure.MeasureSlot(ident, paths));
+            slots.Add(new Slot(ident, intro, loop, null, Measured: true));
             progress?.Report((n + 1, identities.Count, ident.Title));
         }
         if (slots.Count == 0)
-            throw new ExtractionException("no slots could be measured — none of the sheet's WEMs were found in the export folder.");
+            throw new ExtractionException($"no slots could be measured — none of the sheet's WEMs were found {where}.");
         store.Upsert(slots);
         return new CatalogBuildResult(slots.Count, skipped);
     }

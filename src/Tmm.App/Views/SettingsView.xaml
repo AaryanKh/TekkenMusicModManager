@@ -48,13 +48,13 @@
                 <StackPanel>
                     <TextBlock Text="Slot catalog  —  optional" Style="{StaticResource H2}" Margin="0,0,0,4"/>
                     <TextBlock Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,8" TextWrapping="Wrap"
-                               Text="You do not need to do anything here. A measured catalog ships with the app, so mods build straight away and FModel is not required. There are only two reasons to rebuild: a game patch changed a track's length, or you want the Season 2 and collab slots, which are not in pakchunk0 and so are missing from the shipped catalog."/>
+                               Text="You do not need to do anything here. A measured catalog ships with the app, so mods build straight away. There are only two reasons to rebuild: a game patch changed a track's length, or you want the Season 2 and collab slots, which are missing from the shipped catalog."/>
                     <TextBlock Style="{StaticResource Muted}" FontSize="12" Margin="0,0,0,8" TextWrapping="Wrap"
-                               Text="To rebuild: export Polaris/Content/WwiseAudio/Media from the game's paks with FModel, point this at the folder, and build. Lengths are always measured from the stock WEM headers, never transcribed from the spreadsheet. Slots whose WEMs are missing from your export are skipped and listed, not treated as errors."/>
-                    <TextBlock Text="Folder with extracted stock .wem files" Style="{StaticResource Label}"/>
+                               Text="Rebuilding reads the stock WEMs straight from the game's own paks, Season 2 and collab tracks included, so there is nothing to export first. Lengths are always measured from the stock WEM headers, never transcribed from the spreadsheet."/>
+                    <Button Content="Rebuild catalog from the game" Command="{Binding BuildCatalogCommand}" HorizontalAlignment="Left" Margin="0,0,0,8"/>
+                    <TextBlock Text="Folder of exported stock .wem files (only used when the game folder is not set)" Style="{StaticResource Label}"/>
                     <DockPanel Style="{StaticResource PathRow}">
                         <Button DockPanel.Dock="Right" Content="Browse…" Command="{Binding BrowseWemFolderCommand}" Margin="6,0,0,0"/>
-                        <Button DockPanel.Dock="Right" Content="Rebuild catalog" Command="{Binding BuildCatalogCommand}" Margin="6,0,0,0"/>
                         <TextBox Text="{Binding WemSourceFolder, UpdateSourceTrigger=PropertyChanged}"/>
                     </DockPanel>
                     <ProgressBar Value="{Binding Progress, Mode=OneWay}" Maximum="100" Margin="0,0,0,6" Visibility="{Binding IsBuilding, Converter={StaticResource Vis}}"/>
@@ -166,6 +166,11 @@
                     <CheckBox Content="Write a small metadata file (.tmm.json) beside each pak I build" IsChecked="{Binding WriteModMetadata}"/>
                     <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="24,4,0,0"
                                Text="It names the mod, its slot and its WEMs, and is copied into ~mods with the pak. Scan on the Dashboard uses it to recognise the pak later: on a new PC, after clearing the app's data, or when you send the pak to someone. It holds no file paths. Applies to mods built or rebuilt from now on; the game ignores the extra file."/>
+                    <CheckBox Content="Show my songs' names in the jukebox instead of the stock track names" IsChecked="{Binding RenameJukeboxTitles}" Margin="0,12,0,0"/>
+                    <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="24,4,0,0"
+                               Text="Adds one more pak, TMM_JukeboxTitles_P, to Polaris\Content\Paks\mods (not ~mods), holding the game's English title list with each enabled mod's slot renamed. It is rewritten whenever you enable, disable, rebuild or delete a mod, and removed when no mod needs it. A name has to fit in the space of the one it replaces, so long ones are shortened. Season 2 slots keep their stock names. English game text only."/>
+                    <TextBlock Text="{Binding TitlesStatus}" Style="{StaticResource Muted}" FontSize="12" Margin="24,4,0,0" TextWrapping="Wrap"
+                               Visibility="{Binding TitlesStatus, Converter={StaticResource Vis}}"/>
                 </StackPanel>
             </Border>
         </StackPanel>

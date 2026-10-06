@@ -8,3 +8,6 @@ TestResults/
 *.swp
 installer/Output/
 *.zip
+
+# Portable-mode runtime data (settings, catalog, mods) stays on the machine that made it.
+UserData/

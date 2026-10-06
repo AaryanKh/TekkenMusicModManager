@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <None Include="../../data/stock_catalog.json" Link="data/stock_catalog.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../data/jukebox_text/**" Link="data/jukebox_text/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

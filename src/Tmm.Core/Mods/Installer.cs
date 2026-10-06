@@ -1,10 +1,15 @@
+using Tmm.Core.Titles;
+
 namespace Tmm.Core.Mods;
 
 /// <summary>Enable = copy pak from the app store into ~mods. Disable = remove it from ~mods.
-/// The app store copy is never deleted by these operations, so toggling is lossless.</summary>
+/// The app store copy is never deleted by these operations, so toggling is lossless.
+///
+/// Each one finishes by bringing the shared jukebox titles container in line with the mods that are now
+/// enabled, and returns what that did. A title problem never fails the operation itself.</summary>
 public static class Installer
 {
-    public static void Enable(ModManifest m, ModRegistry reg, bool force = false)
+    public static TitleSyncResult Enable(ModManifest m, ModRegistry reg, bool force = false)
     {
         var modsDir = reg.Settings.GameModsDir
                       ?? throw new GameNotFoundException("Game folder is not set. Point Settings at ...\\steamapps\\common\\TEKKEN 8.");
@@ -37,21 +42,24 @@ public static class Installer
         var metaDst = ModMetadata.PathFor(installed);
         if (File.Exists(metaSrc)) FileOps.Copy(metaSrc, metaDst);
         else FileOps.DeleteFile(metaDst);
+        return JukeboxTitles.Sync(reg);
     }
 
-    public static void Disable(ModManifest m, ModRegistry reg)
+    public static TitleSyncResult Disable(ModManifest m, ModRegistry reg)
     {
         var installed = reg.InstalledPak(m);
-        if (installed is null) return;
+        if (installed is null) return JukeboxTitles.Sync(reg);
         FileOps.DeleteFile(installed);
         FileOps.DeleteFile(ModMetadata.PathFor(installed));   // it was copied in with the pak, so it leaves with it
+        return JukeboxTitles.Sync(reg);
     }
 
     /// <summary>Disable, then remove from the app store. The only destructive operation.</summary>
-    public static void Delete(ModManifest m, ModRegistry reg)
+    public static TitleSyncResult Delete(ModManifest m, ModRegistry reg)
     {
-        Disable(m, reg);
+        var titles = Disable(m, reg);   // a disabled mod is already out of the titles
         var dir = reg.ModDir(m);
         FileOps.DeleteDirectory(dir);
+        return titles;
     }
 }

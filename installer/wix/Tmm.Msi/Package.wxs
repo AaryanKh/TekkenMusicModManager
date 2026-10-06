@@ -53,6 +53,7 @@
       <Files Include="$(var.PublishDir)**" />
       <Component Guid="B1D4E6F8-2C3A-4B5D-8E9F-0A1B2C3D4E5F">
         <File Source="..\..\THIRD-PARTY-NOTICES.txt" />
+        <File Source="..\..\..\LICENSE" />
       </Component>
       <Component Guid="C2E5F7A9-3D4B-4C6E-9FA0-1B2C3D4E5F60">
         <File Source="..\..\..\README.md" />

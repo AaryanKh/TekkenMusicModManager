@@ -55,7 +55,7 @@ public sealed class SettingsViewModel : ObservableObject
         BrowseWemFolderCommand = new RelayCommand(() => Pick(p => WemSourceFolder = p, true, "Folder with the extracted stock .wem files"));
         SaveCommand = new RelayCommand(Save, () => Dirty);
         RevertCommand = new RelayCommand(Revert, () => Dirty);
-        BuildCatalogCommand = new AsyncRelayCommand(BuildCatalogAsync, () => !IsBuilding && !string.IsNullOrWhiteSpace(WemSourceFolder));
+        BuildCatalogCommand = new AsyncRelayCommand(BuildCatalogAsync, () => !IsBuilding && (_draft.GameRootLooksValid() || !string.IsNullOrWhiteSpace(WemSourceFolder)));
         CheckFfmpegCommand = new RelayCommand(CheckFfmpeg);
         InstallFfmpegCommand = new AsyncRelayCommand(InstallFfmpegAsync, () => !IsInstallingFfmpeg && WingetAvailable);
         FindGameCoverCommand = new AsyncRelayCommand(p => FindGameCoverAsync(p as GameCoverRow), p => p is GameCoverRow && !IsFindingCover);
@@ -90,7 +90,7 @@ public sealed class SettingsViewModel : ObservableObject
 
     public IReadOnlyList<string> PackerOptions => Packers;
 
-    public string? GameRoot { get => _draft.GameRoot; set { _draft.GameRoot = Blank(value); Touch(); RefreshStatus(); } }
+    public string? GameRoot { get => _draft.GameRoot; set { _draft.GameRoot = Blank(value); Touch(); RefreshStatus(); BuildCatalogCommand.RaiseCanExecuteChanged(); } }
     public string Packer { get => _draft.Packer; set { _draft.Packer = value ?? "unrealpak"; Touch(); OnPropertyChanged(nameof(IsUnrealPak)); OnPropertyChanged(nameof(IsRepak)); } }
     public bool IsUnrealPak => _draft.Packer != "repak";
     public bool IsRepak => _draft.Packer == "repak";
@@ -104,6 +104,9 @@ public sealed class SettingsViewModel : ObservableObject
     public double TargetLufs { get => _draft.TargetLufs ?? -16.0; set { if (_draft.TargetLufs is not null) { _draft.TargetLufs = Math.Clamp(value, -30, -6); Touch(); } } }
     public bool IncludeCoverage { get => _draft.IncludeCoverageInScore; set { _draft.IncludeCoverageInScore = value; _draft.CoverageWeight = value ? Math.Max(0.3, _draft.CoverageWeight) : 0; Touch(); } }
     public bool WriteModMetadata { get => _draft.WriteModMetadata; set { _draft.WriteModMetadata = value; Touch(); } }
+    public bool RenameJukeboxTitles { get => _draft.RenameJukeboxTitles; set { _draft.RenameJukeboxTitles = value; Touch(); } }
+    public string TitlesStatus { get => _titlesStatus; private set => SetProperty(ref _titlesStatus, value); }
+    private string _titlesStatus = "";
     public string AppDir => _draft.AppDir;
 
     public bool Dirty { get => _dirty; private set { if (SetProperty(ref _dirty, value)) { SaveCommand.RaiseCanExecuteChanged(); RevertCommand.RaiseCanExecuteChanged(); } } }
@@ -290,8 +293,12 @@ public sealed class SettingsViewModel : ObservableObject
 
     private void Save()
     {
+        bool titlesChanged = _draft.RenameJukeboxTitles != _app.Settings.RenameJukeboxTitles
+                             || _draft.GameRoot != _app.Settings.GameRoot;
         _app.SaveSettings(_draft.Clone());
         Dirty = false;
+        // Turning titles on or off takes effect now, not at the next enable.
+        if (titlesChanged) TitlesStatus = Core.Titles.JukeboxTitles.Sync(_app.Registry).Message;
         RefreshStatus();
         Saved?.Invoke(this, EventArgs.Empty);
     }
@@ -308,15 +315,20 @@ public sealed class SettingsViewModel : ObservableObject
     {
         var sheet = _app.SheetPath;
         if (sheet is null) { _app.Dialogs.ShowError("Sheet missing", "data/jukebox_slots.csv was not found next to the app."); return; }
-        var wems = WemSourceFolder;
-        if (wems is null) return;
         if (Dirty) Save();
-        IsBuilding = true; Progress = 0; BuildStatus = "Reading stock WEM headers…";
+        // The game's own paks are the source whenever the game folder is set; an export folder is only the
+        // fallback for when it is not.
+        var paks = _app.Settings.GameRootLooksValid() ? _app.Settings.GamePaksDir : null;
+        var wems = WemSourceFolder;
+        if (paks is null && wems is null) return;
+        IsBuilding = true; Progress = 0; BuildStatus = paks is not null ? "Reading the game's paks…" : "Reading stock WEM headers…";
         var progress = new Progress<(int done, int total, string what)>(p => { Progress = 100.0 * p.done / Math.Max(1, p.total); BuildStatus = $"{p.done}/{p.total}  {p.what}"; });
         try
         {
             var store = _app.Catalog; var scratch = _app.Settings.ScratchDir;
-            var r = await Task.Run(() => CatalogBuilder.Build(sheet, new PreExtractedFolderExtractor(wems, allowMissing: true), scratch, store, progress));
+            var r = await Task.Run(() => paks is not null
+                ? CatalogBuilder.Build(sheet, new GameInstallWemSource(paks), store, progress)
+                : CatalogBuilder.Build(sheet, new PreExtractedFolderExtractor(wems!, allowMissing: true), scratch, store, progress));
             _app.ReloadCatalog();
             BuildStatus = r.Skipped.Count == 0
                 ? $"Done: {r.Measured} slots measured."
@@ -326,9 +338,8 @@ public sealed class SettingsViewModel : ObservableObject
                 var names = string.Join("\n", r.Skipped.Take(15).Select(s => $"  #{s.No}  {s.Title}"));
                 if (r.Skipped.Count > 15) names += $"\n  …and {r.Skipped.Count - 15} more";
                 _app.Dialogs.ShowError("Some slots were skipped",
-                    $"{r.Measured} of {r.Total} slots were measured. These {r.Skipped.Count} had no stock WEM in the export folder, " +
-                    "so they cannot be used as mod targets:\n\n" + names +
-                    "\n\nSeason 2 and collab tracks are not in pakchunk0. Export the other pakchunks with FModel and build again to add them.");
+                    $"{r.Measured} of {r.Total} slots were measured. These {r.Skipped.Count} had no stock WEM in " +
+                    (paks is not null ? "the game's paks" : "the export folder") + ", so they cannot be used as mod targets:\n\n" + names);
             }
         }
         catch (TmmException e) { BuildStatus = "Failed."; _app.Dialogs.ShowError("Catalog build failed", e.Message); }

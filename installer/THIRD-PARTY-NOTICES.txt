@@ -1,4 +1,13 @@
-Tekken Music Mod Manager - third-party notices
+Tekken Music Mod Manager - licence and third-party notices
+
+Tekken Music Mod Manager is free software, licensed under the GNU General Public License,
+version 3 or later. The full text is in LICENSE next to this file. Source code:
+https://github.com/AaryanKh/TekkenMusicModManager
+
+The program includes a C# port of the Kraken decompressor from ooz
+(https://github.com/powzix/ooz), Copyright (C) 2016 Powzix, licensed under the GNU GPL v3 or
+later. It is what lets the app read the game's own Oodle-compressed files, so nothing has to be
+exported with another tool.
 
 This installer bundles the .NET 8 runtime and WPF (MIT licence, (c) .NET Foundation and
 contributors) together with the application. Nothing else is bundled.
@@ -21,7 +30,8 @@ Optional:
               commercial licence). Used only when you point the app at a rubberband executable.
 
 The jukebox slot list (data\jukebox_slots.csv) is derived from the community "Jukebox WEM List"
-spreadsheet: IDs and titles only.
+spreadsheet: IDs and titles only. data\jukebox_text\jukebox_text.json maps those slots to the keys
+of the game's title table; the table itself is read from your own install, not shipped.
 
 TEKKEN is a trademark of Bandai Namco Entertainment Inc. This project is not affiliated with or
 endorsed by Bandai Namco or Epic Games.

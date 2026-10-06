@@ -5,6 +5,8 @@
     <RootNamespace>Tmm.Core</RootNamespace>
     <AssemblyName>Tmm.Core</AssemblyName>
     <Description>Engine for the Tekken 8 jukebox music mod manager: WEM I/O, catalog, loop fitting, rendering, packing and mod registry. No UI, no NuGet dependencies.</Description>
+    <!-- The Kraken decompressor (Pak/Kraken.cs) is a pointer-level port of ooz. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
 </Project>

@@ -21,8 +21,10 @@ public sealed class ModBuilder
         _reg = reg; _stretcher = stretcher; _packer = packer;
     }
 
+    /// <param name="jukeboxTitle">What the jukebox should call the slot while this mod is enabled. Null
+    /// leaves it to be suggested from the song's tags when the titles are next written.</param>
     public ModManifest Build(string name, string songPath, PcmBuffer pcm, Slot slot, RenderPlan plan,
-                             IProgress<(int done, int total, string what)>? progress = null)
+                             IProgress<(int done, int total, string what)>? progress = null, string? jukeboxTitle = null)
     {
         // Before any rendering: a name that another pak already owns is a mistake, not something to fix later.
         if (_reg.FindNameConflict(name) is string taken)
@@ -38,6 +40,7 @@ public sealed class ModBuilder
             Plan = plan.Clone(),
             PakName = PakLayout.PakFilename(safe),
             WemIds = slot.WemIds.ToList(),
+            JukeboxTitle = string.IsNullOrWhiteSpace(jukeboxTitle) ? null : Titles.JukeboxTitles.Clean(jukeboxTitle),
         };
         RenderAndPack(m, pcm, slot, progress);
         return m;
